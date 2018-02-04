@@ -1,6 +1,6 @@
 SET(EXAMPLE_NAME "VulkanPBR")
 file(GLOB SOURCE *.cpp ${BASE_HEADERS})
-file(GLOB SHADERS "/data/shaders/*.vert" "/data/shaders/*.frag" "/data/shaders/*.comp" "/data/shaders/*.geom" "/data/shaders/*.tesc" "/data/shaders/*.tese")
+file(GLOB SHADERS "../data/shaders/*.vert" "../data/shaders/*.frag" "../data/shaders/*.comp" "../data/shaders/*.geom" "../data/shaders/*.tesc" "../data/shaders/*.tese")
 source_group("Shaders" FILES ${SHADERS})
 if(WIN32)
 	add_executable(${EXAMPLE_NAME} WIN32 ${MAIN_CPP} ${SOURCE} ${SHADERS})
