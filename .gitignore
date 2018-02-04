@@ -224,3 +224,5 @@ data/models/cerberus/*.*
 *.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
+
+libbase.a
