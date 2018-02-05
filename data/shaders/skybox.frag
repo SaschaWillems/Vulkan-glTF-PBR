@@ -7,7 +7,7 @@ layout (location = 0) in vec3 inUVW;
 layout (location = 0) out vec4 outColor;
 
 layout (binding = 1) uniform UBOParams {
-	vec4 lights[4];
+	vec4 _pad0;
 	float exposure;
 	float gamma;
 } uboParams;

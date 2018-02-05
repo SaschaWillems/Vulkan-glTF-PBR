@@ -12,7 +12,7 @@ layout (binding = 0) uniform UBO {
 } ubo;
 
 layout (binding = 1) uniform UBOParams {
-	vec4 lights[4];
+	vec4 lightDir;
 	float exposure;
 	float gamma;
 } uboParams;
@@ -142,11 +142,8 @@ void main()
 	vec3 F0 = vec3(0.04); 
 	F0 = mix(F0, ALBEDO, metallic);
 
-	vec3 Lo = vec3(0.0);
-	for(int i = 0; i < uboParams.lights[i].length(); i++) {
-		vec3 L = normalize(uboParams.lights[i].xyz - inWorldPos);
-		Lo += specularContribution(L, V, N, F0, metallic, roughness);
-	}   
+	vec3 L = normalize(uboParams.lightDir.xyz);
+	vec3 Lo = specularContribution(L, V, N, F0, metallic, roughness);
 	
 	vec2 brdf = texture(samplerBRDFLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
 	vec3 reflection = prefilteredReflection(R, roughness).rgb;	
