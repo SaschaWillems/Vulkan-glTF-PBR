@@ -320,6 +320,13 @@ namespace vkglTF
 			VkDeviceMemory memory;
 		} indices;
 
+		struct Primitive {
+			uint32_t firstIndex;
+			uint32_t indexCount;
+			uint32_t materialIndex;
+		};
+		std::vector<Primitive> primitives;
+
 		std::map<std::string, vkglTF::Texture> textures;
 
 		void destroy(VkDevice device)
@@ -332,6 +339,93 @@ namespace vkglTF
 				texture.second.destroy();
 			}
 		};
+
+		void loadNode(const tinygltf::Node &node, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer)
+		{
+			// Parent node with children
+			if (node.children.size() > 0) {
+				for (auto i = 0; i < node.children.size(); i++) {
+					loadNode(model.nodes[node.children[i]], model, indexBuffer, vertexBuffer);
+				}
+			}
+			// Node contains mesh data
+			if (node.mesh > -1) {
+				const tinygltf::Mesh mesh = model.meshes[node.mesh];
+				for (size_t j = 0; j < mesh.primitives.size(); j++) {
+					const tinygltf::Primitive &primitive = mesh.primitives[j];
+					if (primitive.indices < 0) {
+						continue;
+					}
+					uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
+					uint32_t indexCount = 0;
+					// Vertices
+					{
+						const float *bufferPos = nullptr;
+						const float *bufferNormals = nullptr;
+						const float *bufferTexCoords = nullptr;
+
+						// Position attribute is required
+						assert(primitive.attributes.find("POSITION") != primitive.attributes.end());
+
+						const tinygltf::Accessor &posAccessor = model.accessors[primitive.attributes.find("POSITION")->second];
+						const tinygltf::BufferView &posView = model.bufferViews[posAccessor.bufferView];
+						bufferPos = reinterpret_cast<const float *>(&(model.buffers[posView.buffer].data[posAccessor.byteOffset + posView.byteOffset]));
+
+						if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
+							const tinygltf::Accessor &normAccessor = model.accessors[primitive.attributes.find("NORMAL")->second];
+							const tinygltf::BufferView &normView = model.bufferViews[normAccessor.bufferView];
+							bufferNormals = reinterpret_cast<const float *>(&(model.buffers[normView.buffer].data[normAccessor.byteOffset + normView.byteOffset]));
+						}
+
+						if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
+							const tinygltf::Accessor &uvAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
+							const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
+							bufferTexCoords = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
+						}
+
+						vertexBuffer.resize(posAccessor.count);
+						for (size_t v = 0; v < posAccessor.count; v++) {
+							vertexBuffer[v].pos = glm::make_vec3(&bufferPos[v * 3]);
+							vertexBuffer[v].normal = bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f);
+							vertexBuffer[v].uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
+						}
+					}
+					// Indices
+					{
+						const tinygltf::Accessor &accessor = model.accessors[primitive.indices];
+						const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
+						const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
+
+						indexCount = static_cast<uint32_t>(accessor.count);
+
+						switch (accessor.componentType) {
+						case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
+							uint32_t *buf = new uint32_t[accessor.count];
+							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint32_t));
+							for (size_t index = 0; index < accessor.count; index++) {
+								indexBuffer.push_back(buf[index]);
+							}
+							break;
+						}
+						case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT: {
+							uint16_t *buf = new uint16_t[accessor.count];
+							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint16_t));
+							for (size_t index = 0; index < accessor.count; index++) {
+								indexBuffer.push_back(buf[index]);
+							}
+							break;
+						}
+						default:
+							std::cerr << "Index component type " << accessor.componentType << " not supported!" << std::endl;
+							return;
+						}
+					}
+					// Add primitive
+					// TODO: Material
+					primitives.push_back({ indexStart, indexCount, 0 });
+				}
+			}
+		}
 
 		void loadFromFile(std::string filename, vks::VulkanDevice *device, VkQueue transferQueue)
 		{
@@ -356,79 +450,11 @@ namespace vkglTF
 			std::vector<uint32_t> indexBuffer;
 			std::vector<Vertex> vertexBuffer;
 
-			int32_t nodeIndex = -1;
-
 			if (fileLoaded) {
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
-					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
-					if (node.mesh < 0) {
-						continue;
-					}
-					const tinygltf::Mesh mesh = gltfModel.meshes[node.mesh];
-					for (size_t j = 0; j < mesh.primitives.size(); j++) {
-						const tinygltf::Primitive &primitive = mesh.primitives[j];
-						if (primitive.indices < 0) {
-							continue;
-						}
-						// Vertices
-						{
-							const tinygltf::Accessor &posAccessor = gltfModel.accessors[primitive.attributes.find("POSITION")->second];
-							const tinygltf::BufferView &posView = gltfModel.bufferViews[posAccessor.bufferView];
-							tinygltf::Buffer &posBuffer = gltfModel.buffers[posView.buffer];
-
-							const tinygltf::Accessor &normAccessor = gltfModel.accessors[primitive.attributes.find("NORMAL")->second];
-							const tinygltf::BufferView &normView = gltfModel.bufferViews[normAccessor.bufferView];
-							tinygltf::Buffer &normBuffer = gltfModel.buffers[normView.buffer];
-
-							const tinygltf::Accessor &uvAccessor = gltfModel.accessors[primitive.attributes.find("TEXCOORD_0")->second];
-							const tinygltf::BufferView &uvView = gltfModel.bufferViews[uvAccessor.bufferView];
-							tinygltf::Buffer &uvBuffer = gltfModel.buffers[uvView.buffer];
-
-							const float *pBuf = reinterpret_cast<const float *>(&(posBuffer.data[posAccessor.byteOffset + posView.byteOffset]));
-							const float *nBuf = reinterpret_cast<const float *>(&(normBuffer.data[normAccessor.byteOffset + normView.byteOffset]));
-							const float *tBuf = reinterpret_cast<const float *>(&(normBuffer.data[uvAccessor.byteOffset + uvView.byteOffset]));
-
-							for (size_t v = 0; v < posAccessor.count; v++) {
-								Vertex vertex{};
-								vertex.pos = glm::make_vec3(&pBuf[v * 3]);
-								vertex.normal = glm::make_vec3(&nBuf[v * 3]);
-								vertex.uv = glm::make_vec2(&tBuf[v * 2]);
-								vertexBuffer.push_back(vertex);
-							}
-						}
-						// Indices
-						{
-							const tinygltf::Accessor &accessor = gltfModel.accessors[primitive.indices];
-							const tinygltf::BufferView &bufferView = gltfModel.bufferViews[accessor.bufferView];
-							const tinygltf::Buffer &buffer = gltfModel.buffers[bufferView.buffer];
-
-							switch (accessor.componentType) {
-								case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
-										uint32_t *buf = new uint32_t[accessor.count];
-										memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint32_t));
-										for (size_t index = 0; index < accessor.count; index++) {
-											indexBuffer.push_back(buf[index]);
-										}
-									}
-									break;
-								case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT: {
-										uint16_t *buf = new uint16_t[accessor.count];
-										memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint16_t));
-										for (size_t index = 0; index < accessor.count; index++) {
-											indexBuffer.push_back(buf[index]);
-										}
-									}
-									break;
-								default:
-									std::cerr << "Index component type " << accessor.componentType << " not supported!" << std::endl;
-									return;
-							}
-						}
-					}
-					nodeIndex = static_cast<uint32_t>(i);
-					// TODO: Support for multiple meshes/primitives
-					break;
+					const tinygltf::Node node = gltfModel.nodes[i];
+					loadNode(node, gltfModel, indexBuffer, vertexBuffer);
 				}
 			}
 			else {
@@ -500,12 +526,8 @@ namespace vkglTF
 			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
 
 			// Textures
-			// TODO: Only uses first scene primitive
-			const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
-			const tinygltf::Node node = gltfModel.nodes[nodeIndex];
-			const tinygltf::Mesh mesh = gltfModel.meshes[node.mesh];
-			const tinygltf::Primitive &primitive = mesh.primitives[0];
-			tinygltf::Material &mat = gltfModel.materials[primitive.material];
+			// TODO: Only uses first material for now, move to node/primitive/mesh
+			tinygltf::Material &mat = gltfModel.materials[0];
 
 			// PBR
 			std::vector<std::string> valueNames = { "baseColorTexture", "metallicRoughnessTexture", "normalTexture", "emissiveTexture", "occlusionTexture" };
@@ -532,7 +554,9 @@ namespace vkglTF
 			const VkDeviceSize offsets[1] = { 0 };
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
 			vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(commandBuffer, indices.count, 1, 0, 0, 0);
+			for (auto primitive : primitives) {
+				vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, 0, primitive.firstIndex, 0);
+			}
 		}
 	};
 }
