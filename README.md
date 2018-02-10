@@ -38,16 +38,7 @@ Generates a pre-filtered radiance cube map that is sampled for the **indirect sp
 
 Complete mip chain from *left* roughness = 0.0 to *right* roughenss = 1.0:
 
-<img src="./screenshots/tex_prefiltered_cube_mipchain_0.png">
-<img src="./screenshots/tex_prefiltered_cube_mipchain_1.png">
-<img src="./screenshots/tex_prefiltered_cube_mipchain_2.png">
-<img src="./screenshots/tex_prefiltered_cube_mipchain_3.png">
-<img src="./screenshots/tex_prefiltered_cube_mipchain_4.png">
-<img src="./screenshots/tex_prefiltered_cube_mipchain_5.png">
-<img src="./screenshots/tex_prefiltered_cube_mipchain_6.png">
-<img src="./screenshots/tex_prefiltered_cube_mipchain_7.png">
-<img src="./screenshots/tex_prefiltered_cube_mipchain_8.png">
-<img src="./screenshots/tex_prefiltered_cube_mipchain_9.png">
+<img src="./screenshots/tex_prefiltered_cube_mipchain_0.png"> <img src="./screenshots/tex_prefiltered_cube_mipchain_1.png"> <img src="./screenshots/tex_prefiltered_cube_mipchain_2.png"> <img src="./screenshots/tex_prefiltered_cube_mipchain_3.png"> <img src="./screenshots/tex_prefiltered_cube_mipchain_4.png"> <img src="./screenshots/tex_prefiltered_cube_mipchain_5.png"> <img src="./screenshots/tex_prefiltered_cube_mipchain_6.png"> <img src="./screenshots/tex_prefiltered_cube_mipchain_7.png"> <img src="./screenshots/tex_prefiltered_cube_mipchain_8.png"> <img src="./screenshots/tex_prefiltered_cube_mipchain_9.png">
 
 (*note:* down/up sized to same size for visualization)
 
