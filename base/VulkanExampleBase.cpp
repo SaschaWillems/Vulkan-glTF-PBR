@@ -363,13 +363,11 @@ void VulkanExampleBase::renderLoop()
 				// Rotate
 				if (std::abs(gamePadState.axisLeft.x) > deadZone)
 				{
-					rotation.y += gamePadState.axisLeft.x * 0.5f * camera.rotationSpeed;
 					camera.rotate(glm::vec3(0.0f, gamePadState.axisLeft.x * 0.5f, 0.0f));
 					updateView = true;
 				}
 				if (std::abs(gamePadState.axisLeft.y) > deadZone)
 				{
-					rotation.x -= gamePadState.axisLeft.y * 0.5f * camera.rotationSpeed;
 					camera.rotate(glm::vec3(gamePadState.axisLeft.y * 0.5f, 0.0f, 0.0f));
 					updateView = true;
 				}
@@ -1019,9 +1017,6 @@ int32_t VulkanExampleBase::handleAppInput(struct android_app* app, AInputEvent* 
 
 							vulkanExample->camera.rotate(glm::vec3(deltaX, 0.0f, 0.0f));
 							vulkanExample->camera.rotate(glm::vec3(0.0f, -deltaY, 0.0f));
-
-							vulkanExample->rotation.x += deltaX;
-							vulkanExample->rotation.y -= deltaY;
 
 							vulkanExample->viewChanged();
 

@@ -43,8 +43,8 @@ VkPipelineShaderStageCreateInfo loadShader(VkDevice device, std::string filename
 	shaderStage.stage = stage;
 	shaderStage.pName = "main";
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
-	// Load shader from compressed asset
-	AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_STREAMING);
+	std::string assetpath = "shaders/" + filename;
+	AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, assetpath.c_str(), AASSET_MODE_STREAMING);
 	assert(asset);
 	size_t size = AAsset_getLength(asset);
 	assert(size > 0);
@@ -60,7 +60,6 @@ VkPipelineShaderStageCreateInfo loadShader(VkDevice device, std::string filename
 	moduleCreateInfo.flags = 0;
 	VK_CHECK_RESULT(vkCreateShaderModule(device, &moduleCreateInfo, NULL, &shaderStage.module));
 	delete[] shaderCode;
-	return shaderModule;
 #else
 	std::ifstream is("./../data/shaders/" + filename, std::ios::binary | std::ios::in | std::ios::ate);
 
@@ -235,11 +234,17 @@ public:
 
 	void loadAssets()
 	{
-		//textures.environmentCube.loadFromFile("./../data/textures/tokyo_bigsight_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
-		//textures.environmentCube.loadFromFile("./../data/textures/factory_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
-		textures.environmentCube.loadFromFile("./../data/textures/papermill_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
-		models.skybox.loadFromFile("./../data/models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
-		models.object.loadFromFile("./../data/models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf", vulkanDevice, queue);
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+		const std::string assetpath = "";
+#else
+		const std::string assetpath = "./../data/";
+#endif
+
+		//textures.environmentCube.loadFromFile(assetpath + ".textures/tokyo_bigsight_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
+		//textures.environmentCube.loadFromFile(assetpath + "textures/factory_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
+		textures.environmentCube.loadFromFile(assetpath + "textures/papermill_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
+		models.skybox.loadFromFile(assetpath + "models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
+		models.object.loadFromFile(assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf", vulkanDevice, queue);
 	}
 
 	void setupDescriptors()

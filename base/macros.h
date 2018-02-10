@@ -16,7 +16,7 @@
 	VkResult res = (f);																					\
 	if (res != VK_SUCCESS)																				\
 	{																									\
-		LOGE("Fatal : VkResult is \" %d \" in %s at line %d", res.c_str(), __FILE__, __LINE__);			\
+		LOGE("Fatal : VkResult is \" %d \" in %s at line %d", res, __FILE__, __LINE__);					\
 		assert(res == VK_SUCCESS);																		\
 	}																									\
 }

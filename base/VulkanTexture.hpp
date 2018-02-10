@@ -74,7 +74,8 @@ namespace vks
 			// So they need to be loaded via the asset manager
 			AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_STREAMING);
 			if (!asset) {
-				vks::tools::exitFatal("Could not load texture from " + filename + "\n\nThe file may be part of the additional asset pack.\n\nRun \"download_assets.py\" in the repository root to download the latest version.", -1);
+				LOGE("Could not load texture %s", filename.c_str());
+				exit(-1);
 			}
 			size_t size = AAsset_getLength(asset);
 			assert(size > 0);
@@ -281,7 +282,8 @@ namespace vks
 			// So they need to be loaded via the asset manager
 			AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_STREAMING);
 			if (!asset) {
-				vks::tools::exitFatal("Could not load texture from " + filename + "\n\nThe file may be part of the additional asset pack.\n\nRun \"download_assets.py\" in the repository root to download the latest version.", -1);
+				LOGE("Could not load texture %s", filename.c_str());
+				exit(-1);
 			}
 			size_t size = AAsset_getLength(asset);
 			assert(size > 0);
