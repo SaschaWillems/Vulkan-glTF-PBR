@@ -151,6 +151,7 @@ public:
 		title = "Vulkan glTf 2.0 PBR";
 		camera.type = Camera::CameraType::firstperson;
 		camera.movementSpeed = 4.0f;
+		camera.movementSpeed = 2.0f;
 		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
 		camera.rotationSpeed = 0.25f;
 		camera.setRotation({ -12.0f, 152.0f, 0.0f });
@@ -1345,7 +1346,7 @@ public:
 
 	void updateParams()
 	{
-		uboParams.lightDir = glm::vec4(0.0f, -0.5f, 0.5f, 1.0f);
+		uboParams.lightDir = glm::vec4(0.0f, -0.5f, -0.5f, 1.0f);
 		memcpy(uniformBuffers.params.mapped, &uboParams, sizeof(uboParams));
 	}
 
