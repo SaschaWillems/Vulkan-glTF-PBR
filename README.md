@@ -91,4 +91,6 @@ Building on Android is done using the [Android NDK](http://developer.android.com
 
 ## Links
 * [glTF format specification](https://github.com/KhronosGroup/glTF)
+* [glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models)
 * [tiny glTF library](https://github.com/syoyo/tinygltf)
+* [Environment maps from sIBL Archive](http://www.hdrlabs.com/sibl/archive.html)
