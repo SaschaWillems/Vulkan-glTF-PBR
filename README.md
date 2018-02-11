@@ -50,6 +50,20 @@ Complete mip chain from *left* roughness = 0.0 to *right* roughenss = 1.0:
 
 See ```VulkanExample::generateCubemaps()``` with target ```PREFILTEREDENV```
 
+## Cloning
+This repository contains submodules for some of the external dependencies, so when doing a fresh clone you need to clone recursively:
+
+```
+git clone --recursive https://github.com/SaschaWillems/Vulkan-glTF-PBR.git
+```
+
+Updating submodules manually:
+
+```
+git submodule init
+git submodule update
+```
+
 ## Building
 
 The repository contains everything required to compile and build the examples on **Windows**, **Linux** and **Android** using a C++ compiler that supports C++11. All required dependencies are included.
@@ -58,7 +72,16 @@ The repository contains everything required to compile and build the examples on
 
 Use the provided CMakeLists.txt with CMake to generate a build configuration for your favorite IDE or compiler, e.g.:
 
-```cmake -G "Visual Studio 14 2015 Win64"```
+Windows:
+```
+cmake -G "Visual Studio 14 2015 Win64"
+```
+
+Linux:
+```
+cmake .
+make
+```
 
 ### Android 
 
