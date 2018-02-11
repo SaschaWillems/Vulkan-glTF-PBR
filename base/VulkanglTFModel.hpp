@@ -310,11 +310,11 @@ namespace vkglTF
 			glm::vec2 uv;
 		};
 
-		struct {
+		struct Vertices {
 			VkBuffer buffer;
 			VkDeviceMemory memory;
 		} vertices;
-		struct {
+		struct Indices {
 			int count;
 			VkBuffer buffer;
 			VkDeviceMemory memory;
@@ -468,7 +468,7 @@ namespace vkglTF
 			size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
 			indices.count = static_cast<uint32_t>(indexBuffer.size());
 
-			struct {
+			struct StagingBuffer {
 				VkBuffer buffer;
 				VkDeviceMemory memory;
 			} vertexStaging, indexStaging;
