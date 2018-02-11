@@ -112,7 +112,7 @@ public:
 		void *mapped;
 	};
 
-	struct {
+	struct UniformBuffers {
 		Buffer object;
 		Buffer skybox;
 		Buffer params;
@@ -126,17 +126,17 @@ public:
 	} uboMatrices;
 
 	struct UBOParams {
-		glm::vec4 lightDir;
+		glm::vec4 lightDir = glm::vec4(0.0f, -0.5f, -0.5f, 1.0f);
 		float exposure = 4.5f;
 		float gamma = 2.2f;
 	} uboParams;
 
-	struct {
+	struct Pipelines {
 		VkPipeline skybox;
 		VkPipeline pbr;
 	} pipelines;
 
-	struct {
+	struct DescriptorSets {
 		VkDescriptorSet object;
 		VkDescriptorSet skybox;
 	} descriptorSets;
@@ -862,7 +862,7 @@ public:
 			VkRenderPass renderpass;
 			VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassCI, nullptr, &renderpass));
 
-			struct {
+			struct Offscreen {
 				VkImage image;
 				VkImageView view;
 				VkDeviceMemory memory;
