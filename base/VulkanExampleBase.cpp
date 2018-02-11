@@ -545,14 +545,12 @@ VulkanExampleBase::VulkanExampleBase()
 #endif
 
 #if defined(_WIN32)
-	if (this->settings.validation) {
-		AllocConsole();
-		AttachConsole(GetCurrentProcessId());
-		FILE *stream;
-		freopen_s(&stream, "CONOUT$", "w+", stdout);
-		freopen_s(&stream, "CONOUT$", "w+", stderr);
-		SetConsoleTitle(TEXT("Vulkan validation output"));
-	}
+	AllocConsole();
+	AttachConsole(GetCurrentProcessId());
+	FILE *stream;
+	freopen_s(&stream, "CONOUT$", "w+", stdout);
+	freopen_s(&stream, "CONOUT$", "w+", stderr);
+	SetConsoleTitle(TEXT("Vulkan validation output"));
 #endif
 }
 

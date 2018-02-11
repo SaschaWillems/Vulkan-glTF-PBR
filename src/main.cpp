@@ -150,7 +150,6 @@ public:
 	{
 		title = "Vulkan glTf 2.0 PBR";
 		camera.type = Camera::CameraType::firstperson;
-		camera.movementSpeed = 4.0f;
 		camera.movementSpeed = 2.0f;
 		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
 		camera.rotationSpeed = 0.25f;
@@ -1398,6 +1397,40 @@ public:
 	virtual void viewChanged()
 	{
 		updateUniformBuffers();
+	}
+
+	virtual void keyPressed(uint32_t key)
+	{
+		switch (key) {
+			case KEY_F1:
+				if (uboParams.exposure > 0.1f) {
+					uboParams.exposure -= 0.1f;
+					updateParams();
+					std::cout << "Exposure: " << uboParams.exposure << std::endl;
+				}
+				break;
+			case KEY_F2:
+				if (uboParams.exposure < 10.0f) {
+					uboParams.exposure += 0.1f;
+					updateParams();
+					std::cout << "Exposure: " << uboParams.exposure << std::endl;
+				}
+				break;
+			case KEY_F3:
+				if (uboParams.gamma > 0.1f) {
+					uboParams.gamma -= 0.1f;
+					updateParams();
+					std::cout << "Gamma: " << uboParams.gamma << std::endl;
+				}
+				break;
+			case KEY_F4:
+				if (uboParams.gamma < 10.0f) {
+					uboParams.gamma += 0.1f;
+					updateParams();
+					std::cout << "Gamma: " << uboParams.gamma << std::endl;
+				}
+				break;
+		}
 	}
 };
 
