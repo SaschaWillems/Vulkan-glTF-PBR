@@ -1,10 +1,10 @@
 file(GLOB BASE_SRC "*.cpp")
 file(GLOB BASE_HEADERS "*.hpp")
 
+add_library(base STATIC ${BASE_SRC} ${BASE_HEADERS})
+
 if(WIN32)
-    add_library(base STATIC ${BASE_SRC})
-    target_link_libraries(base ${Vulkan_LIBRARY} ${ASSIMP_LIBRARIES} ${WINLIBS})
+    target_link_libraries(base ${Vulkan_LIBRARY} ${WINLIBS})
  else(WIN32)
-    add_library(base STATIC ${BASE_SRC})
-    target_link_libraries(base ${Vulkan_LIBRARY} ${ASSIMP_LIBRARIES} ${XCB_LIBRARIES} ${WAYLAND_CLIENT_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+    target_link_libraries(base ${Vulkan_LIBRARY} ${XCB_LIBRARIES} ${WAYLAND_CLIENT_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 endif(WIN32)

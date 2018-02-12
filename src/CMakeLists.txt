@@ -1,4 +1,4 @@
-SET(EXAMPLE_NAME "VulkanPBR")
+SET(EXAMPLE_NAME "Vulkan-glTF-PBR")
 file(GLOB SOURCE *.cpp ${BASE_HEADERS})
 file(GLOB SHADERS "../data/shaders/*.vert" "../data/shaders/*.frag" "../data/shaders/*.comp" "../data/shaders/*.geom" "../data/shaders/*.tesc" "../data/shaders/*.tese")
 source_group("Shaders" FILES ${SHADERS})
