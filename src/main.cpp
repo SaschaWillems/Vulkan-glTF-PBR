@@ -238,7 +238,6 @@ public:
 		const std::string assetpath = "";
 #else
 		const std::string assetpath = "./../data/";
-#endif
 		struct stat info;
 		if (stat(assetpath.c_str(), &info) != 0) {
 			std::string msg = "Could not locate asset path in \"" + assetpath + "\".\nMake sure binary is run from correct relative directory!";
@@ -248,6 +247,7 @@ public:
 #endif
 			exit(-1);
 		}
+#endif
 
 		textures.environmentCube.loadFromFile(assetpath + "textures/papermill_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
 		models.skybox.loadFromFile(assetpath + "models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
@@ -1406,6 +1406,7 @@ public:
 		updateUniformBuffers();
 	}
 
+#if !defined(VK_USE_PLATFORM_ANDROID_KHR)
 	virtual void keyPressed(uint32_t key)
 	{
 		switch (key) {
@@ -1439,6 +1440,7 @@ public:
 				break;
 		}
 	}
+#endif
 };
 
 VulkanExample *vulkanExample;

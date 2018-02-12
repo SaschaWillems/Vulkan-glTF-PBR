@@ -85,9 +85,16 @@ make
 
 ### Android 
 
-Building on Android is done using the [Android NDK](http://developer.android.com/tools/sdk/ndk/index.html) and requires a device that supports Vulkan. 
+Building on Android requires the [Android NDK](http://developer.android.com/tools/sdk/ndk/index.html) and uses Pyhton (3.x) for running the required build scripts.
 
-**Note: Android build files will be added soon**
+From within the [android](./android) subfolder:
+```
+build.py
+```
+If you want to deploy to a connected device right after the build:
+```
+build.py -deploy
+```
 
 ## Links
 * [glTF format specification](https://github.com/KhronosGroup/glTF)

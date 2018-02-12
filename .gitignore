@@ -226,3 +226,13 @@ data/models/cerberus/*.*
 *.vcxproj.user
 
 libbase.a
+
+android/assets/
+android/bin/
+android/libs/
+android/obj/
+android/build.xml
+android/local.properties
+android/project.properties
+android/proguard-project.txt
+android/**/.apk
