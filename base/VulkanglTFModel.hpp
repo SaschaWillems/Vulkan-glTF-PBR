@@ -357,6 +357,7 @@ namespace vkglTF
 						continue;
 					}
 					uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
+					uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
 					uint32_t indexCount = 0;
 					// Vertices
 					{
@@ -383,11 +384,15 @@ namespace vkglTF
 							bufferTexCoords = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
 						}
 
-						vertexBuffer.resize(posAccessor.count);
 						for (size_t v = 0; v < posAccessor.count; v++) {
-							vertexBuffer[v].pos = glm::make_vec3(&bufferPos[v * 3]);
-							vertexBuffer[v].normal = bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f);
-							vertexBuffer[v].uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
+							Vertex vert{};
+							vert.pos = glm::make_vec3(&bufferPos[v * 3]);
+							vert.normal = bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f);
+							vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
+							// Vulkan coordinate system
+							vert.pos.y *= -1.0f;
+							vert.normal.y *= -1.0f;
+							vertexBuffer.push_back(vert);
 						}
 					}
 					// Indices
@@ -403,7 +408,7 @@ namespace vkglTF
 							uint32_t *buf = new uint32_t[accessor.count];
 							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint32_t));
 							for (size_t index = 0; index < accessor.count; index++) {
-								indexBuffer.push_back(buf[index]);
+								indexBuffer.push_back(buf[index] + vertexStart);
 							}
 							break;
 						}
@@ -411,7 +416,7 @@ namespace vkglTF
 							uint16_t *buf = new uint16_t[accessor.count];
 							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint16_t));
 							for (size_t index = 0; index < accessor.count; index++) {
-								indexBuffer.push_back(buf[index]);
+								indexBuffer.push_back(buf[index] + vertexStart);
 							}
 							break;
 						}
@@ -420,9 +425,7 @@ namespace vkglTF
 							return;
 						}
 					}
-					// Add primitive
-					// TODO: Material
-					primitives.push_back({ indexStart, indexCount, 0 });
+					primitives.push_back({ indexStart, indexCount, primitive.material });
 				}
 			}
 		}
@@ -555,7 +558,7 @@ namespace vkglTF
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
 			vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 			for (auto primitive : primitives) {
-				vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, 0, primitive.firstIndex, 0);
+				vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 			}
 		}
 	};
