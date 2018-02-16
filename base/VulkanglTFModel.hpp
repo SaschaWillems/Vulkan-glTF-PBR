@@ -300,6 +300,29 @@ namespace vkglTF
 	};
 
 	/*
+		glTF material class
+	*/
+	struct Material {
+		bool hasBaseColorTexture = false;
+		bool hasMetallicRoughnessTexture = false;
+		bool hasNormalTexture = false;
+		bool hasOcclusionTexture = false;
+		bool hasEmissiveTexture = false;
+		vkglTF::Texture baseColorTexture;
+		vkglTF::Texture metallicRoughnessTexture;
+		vkglTF::Texture normalTexture;
+		vkglTF::Texture occlusionTexture;
+		vkglTF::Texture emissiveTexture;
+		void destroy(VkDevice device) {
+			if (hasBaseColorTexture) { baseColorTexture.destroy(); }
+			if (hasMetallicRoughnessTexture) { metallicRoughnessTexture.destroy(); }
+			if (hasNormalTexture) { normalTexture.destroy(); }
+			if (hasOcclusionTexture) { occlusionTexture.destroy(); }
+			if (hasEmissiveTexture) { emissiveTexture.destroy(); }
+		}
+	};
+
+	/*
 		glTF model loading and rendering class
 	*/
 	struct Model {
@@ -323,11 +346,11 @@ namespace vkglTF
 		struct Primitive {
 			uint32_t firstIndex;
 			uint32_t indexCount;
-			uint32_t materialIndex;
+			int32_t materialIndex;
 		};
 		std::vector<Primitive> primitives;
 
-		std::map<std::string, vkglTF::Texture> textures;
+		std::vector<Material> materials;
 
 		void destroy(VkDevice device)
 		{
@@ -335,8 +358,8 @@ namespace vkglTF
 			vkFreeMemory(device, vertices.memory, nullptr);
 			vkDestroyBuffer(device, indices.buffer, nullptr);
 			vkFreeMemory(device, indices.memory, nullptr);
-			for (auto texture : textures) {
-				texture.second.destroy();
+			for (auto material : materials) {
+				material.destroy(device);
 			}
 		};
 
@@ -528,27 +551,30 @@ namespace vkglTF
 			vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
 			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
 
-			// Textures
-			// TODO: Only uses first material for now, move to node/primitive/mesh
-			tinygltf::Material &mat = gltfModel.materials[0];
-
-			// PBR
-			std::vector<std::string> valueNames = { "baseColorTexture", "metallicRoughnessTexture", "normalTexture", "emissiveTexture", "occlusionTexture" };
-			for (auto name : valueNames) {
-				int32_t index = -1;
-				if (mat.values.find(name) != mat.values.end()) {
-					index = mat.values[name].TextureIndex();
+			// Materials
+			for (tinygltf::Material &mat : gltfModel.materials) {
+				vkglTF::Material material;
+				if (mat.values.find("baseColorTexture") != mat.values.end()) {
+					material.hasBaseColorTexture = true;
+					material.baseColorTexture.fromglTfImage(gltfModel.images[mat.values["baseColorTexture"].TextureIndex()], device, transferQueue);
 				}
-				if (index < 0) {
-					if (mat.additionalValues.find(name) != mat.additionalValues.end()) {
-						index = mat.additionalValues[name].TextureIndex();
-					}
+				if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
+					material.hasMetallicRoughnessTexture = true;
+					material.metallicRoughnessTexture.fromglTfImage(gltfModel.images[mat.values["metallicRoughnessTexture"].TextureIndex()], device, transferQueue);
 				}
-				if (index < 0) {
-					continue;
+				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
+					material.hasNormalTexture = true;
+					material.normalTexture.fromglTfImage(gltfModel.images[mat.additionalValues["normalTexture"].TextureIndex()], device, transferQueue);
 				}
-				std::cout << "Loading texture for material \"" << name << "\"" << std::endl;
-				textures[name].fromglTfImage(gltfModel.images[index], device, transferQueue);
+				if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
+					material.hasEmissiveTexture = true;
+					material.emissiveTexture.fromglTfImage(gltfModel.images[mat.additionalValues["emissiveTexture"].TextureIndex()], device, transferQueue);
+				}
+				if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
+					material.hasOcclusionTexture = true;
+					material.occlusionTexture.fromglTfImage(gltfModel.images[mat.additionalValues["occlusionTexture"].TextureIndex()], device, transferQueue);
+				}
+				materials.push_back(material);
 			}
 		}
 
