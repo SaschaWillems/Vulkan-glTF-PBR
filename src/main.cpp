@@ -276,15 +276,10 @@ public:
 			exit(-1);
 		}
 #endif
-		// Empty texture for filling samplers not used by models/materials
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
-		// Environment map
 		textures.environmentCube.loadFromFile(assetpath + "textures/papermill_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
-//		textures.environmentCube.loadFromFile(assetpath + "textures/tokyo_bigsight_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
 		models.skybox.loadFromFile(assetpath + "models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
-		//models.object.loadFromFile(assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf", vulkanDevice, queue);
-		models.object.loadFromFile(assetpath + "models/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf", vulkanDevice, queue);
-		//models.object.loadFromFile(assetpath + "models/SciFiHelmet/glTF/SciFiHelmet.gltf", vulkanDevice, queue);		
+		models.object.loadFromFile(assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf", vulkanDevice, queue);
 	}
 
 	void setupDescriptors()
