@@ -95,6 +95,7 @@ class VulkanExample : public VulkanExampleBase
 public:
 	struct Textures {
 		vks::TextureCubeMap environmentCube;
+		vks::Texture2D empty;
 		vks::Texture2D lutBrdf;
 		vks::TextureCubeMap irradianceCube;
 		vks::TextureCubeMap prefilteredCube;
@@ -131,20 +132,32 @@ public:
 		float gamma = 2.2f;
 	} uboParams;
 
+	VkPipelineLayout pipelineLayout;
+
 	struct Pipelines {
 		VkPipeline skybox;
 		VkPipeline pbr;
 	} pipelines;
+
+	struct DescriptorSetLayouts {
+		VkDescriptorSetLayout scene;
+		VkDescriptorSetLayout material;
+	} descriptorSetLayouts;
 
 	struct DescriptorSets {
 		VkDescriptorSet object;
 		VkDescriptorSet skybox;
 	} descriptorSets;
 
-	VkPipelineLayout pipelineLayout;
-	VkDescriptorSetLayout descriptorSetLayout;
-
 	glm::vec3 rotation = glm::vec3(0.0f);
+
+	struct PushConstBlockMaterial {
+		float hasBaseColorTexture;
+		float hasMetallicRoughnessTexture;
+		float hasNormalTexture;
+		float hasOcclusionTexture;
+		float hasEmissiveTexture;
+	} pushConstBlockMaterial;
 
 	VulkanExample() : VulkanExampleBase()
 	{
@@ -163,7 +176,8 @@ public:
 		vkDestroyPipeline(device, pipelines.pbr, nullptr);
 
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.scene, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.material, nullptr);
 
 		models.object.destroy(device);
 		models.skybox.destroy(device);
@@ -222,9 +236,23 @@ public:
 			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.skybox, 0, NULL);
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
 			models.skybox.draw(drawCmdBuffers[i]);
-
-			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.object, 0, NULL);
+					
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
+			std::array<VkDescriptorSet, 2> descriptorsets = {
+				descriptorSets.object,
+				models.object.materials[0].descriptorSet,
+			};
+			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 2, descriptorsets.data(), 0, NULL);
+
+			PushConstBlockMaterial pushConstBlockMaterial{
+				static_cast<float>(models.object.materials[0].hasBaseColorTexture),
+				static_cast<float>(models.object.materials[0].hasMetallicRoughnessTexture),
+				static_cast<float>(models.object.materials[0].hasNormalTexture),
+				static_cast<float>(models.object.materials[0].hasOcclusionTexture),
+				static_cast<float>(models.object.materials[0].hasEmissiveTexture)
+			};
+			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
+
 			models.object.draw(drawCmdBuffers[i]);
 
 			vkCmdEndRenderPass(drawCmdBuffers[i]);
@@ -248,56 +276,73 @@ public:
 			exit(-1);
 		}
 #endif
-
+		// Empty texture for filling samplers not used by models/materials
+		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
+		// Environment map
 		textures.environmentCube.loadFromFile(assetpath + "textures/papermill_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
+//		textures.environmentCube.loadFromFile(assetpath + "textures/tokyo_bigsight_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
 		models.skybox.loadFromFile(assetpath + "models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
-		models.object.loadFromFile(assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf", vulkanDevice, queue);
+		//models.object.loadFromFile(assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf", vulkanDevice, queue);
+		models.object.loadFromFile(assetpath + "models/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf", vulkanDevice, queue);
+		//models.object.loadFromFile(assetpath + "models/SciFiHelmet/glTF/SciFiHelmet.gltf", vulkanDevice, queue);		
 	}
 
 	void setupDescriptors()
 	{
-		// Descriptor Pool
+		/*
+			Descriptor Pool
+		*/
+		uint32_t imageSamplerCount = 0;
+		uint32_t materialCount = 0;
+		// Environment samplers (radiance, irradiance, brdf lut)
+		imageSamplerCount += 3;
+		// Model materials
+		std::vector<vkglTF::Model*> modellist = { &models.skybox, &models.object };
+		for (auto &model : modellist) {
+			for (auto &material : model->materials) {
+				imageSamplerCount += 5;
+				materialCount++;
+			}
+		}
+
 		std::vector<VkDescriptorPoolSize> poolSizes = {
 			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4 },
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16 }
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount }
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		descriptorPoolCI.poolSizeCount = 2;
 		descriptorPoolCI.pPoolSizes = poolSizes.data();
-		descriptorPoolCI.maxSets = 2;
+		descriptorPoolCI.maxSets = 2 + materialCount;
 		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool));
 
-		// Descriptor set layout
-		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-			{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-			{ 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-			{ 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-			{ 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-			{ 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-			{ 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-			{ 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-			{ 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-			{ 8, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-			{ 9, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-		};
-		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
-		descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
-		descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayout));
+		/*
+			Descriptor sets
+		*/
 
-		// Descriptor sets
-		VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
-		descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		descriptorSetAllocInfo.descriptorPool = descriptorPool;
-		descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayout;
-		descriptorSetAllocInfo.descriptorSetCount = 1;
-
-		// Object
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.object));
+		// Scene (matrices and environment maps)
 		{
-			std::array<VkWriteDescriptorSet, 10> writeDescriptorSets{ };
+			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+				{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+			};
+			VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+			descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
+			descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.scene));
+
+			VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+			descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			descriptorSetAllocInfo.descriptorPool = descriptorPool;
+			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.scene;
+			descriptorSetAllocInfo.descriptorSetCount = 1;
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.object));
+
+			std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};
 
 			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -313,31 +358,85 @@ public:
 			writeDescriptorSets[1].dstBinding = 1;
 			writeDescriptorSets[1].pBufferInfo = &uniformBuffers.params.descriptor;
 
-			std::vector<VkDescriptorImageInfo> imageDescriptors = {
-				textures.irradianceCube.descriptor,
-				textures.lutBrdf.descriptor,
-				textures.prefilteredCube.descriptor,
-				models.object.textures["baseColorTexture"].descriptor,
-				models.object.textures["normalTexture"].descriptor,
-				models.object.textures["occlusionTexture"].descriptor,
-				models.object.textures["metallicRoughnessTexture"].descriptor,
-				models.object.textures["emissiveTexture"].descriptor,
-			};
-			for (size_t i = 0; i < imageDescriptors.size(); i++) {
-				writeDescriptorSets[i + 2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				writeDescriptorSets[i + 2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				writeDescriptorSets[i + 2].descriptorCount = 1;
-				writeDescriptorSets[i + 2].dstSet = descriptorSets.object;
-				writeDescriptorSets[i + 2].dstBinding = static_cast<uint32_t>(i + 2);
-				writeDescriptorSets[i + 2].pImageInfo = &imageDescriptors[i];
-			}
+			writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeDescriptorSets[2].descriptorCount = 1;
+			writeDescriptorSets[2].dstSet = descriptorSets.object;
+			writeDescriptorSets[2].dstBinding = 2;
+			writeDescriptorSets[2].pImageInfo = &textures.irradianceCube.descriptor;
+
+			writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeDescriptorSets[3].descriptorCount = 1;
+			writeDescriptorSets[3].dstSet = descriptorSets.object;
+			writeDescriptorSets[3].dstBinding = 3;
+			writeDescriptorSets[3].pImageInfo = &textures.prefilteredCube.descriptor;
+
+			writeDescriptorSets[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSets[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writeDescriptorSets[4].descriptorCount = 1;
+			writeDescriptorSets[4].dstSet = descriptorSets.object;
+			writeDescriptorSets[4].dstBinding = 4;
+			writeDescriptorSets[4].pImageInfo = &textures.lutBrdf.descriptor;
 
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
 		}
 
-		// Skybox
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.skybox));
+		// Material (samplers)
 		{
+			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+				{ 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+			};
+			VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+			descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
+			descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.material));
+
+			// Per-Material descriptor sets
+			for (auto &material : models.object.materials) {
+				VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+				descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				descriptorSetAllocInfo.descriptorPool = descriptorPool;
+				descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.material;
+				descriptorSetAllocInfo.descriptorSetCount = 1;
+				VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &material.descriptorSet));
+
+				std::vector<VkDescriptorImageInfo> imageDescriptors = {
+					material.hasBaseColorTexture ? models.object.materials[0].baseColorTexture.descriptor : textures.empty.descriptor,
+					material.hasNormalTexture ? models.object.materials[0].normalTexture.descriptor : textures.empty.descriptor,
+					material.hasOcclusionTexture ? models.object.materials[0].occlusionTexture.descriptor : textures.empty.descriptor,
+					material.hasMetallicRoughnessTexture ? models.object.materials[0].metallicRoughnessTexture.descriptor : textures.empty.descriptor,
+					material.hasEmissiveTexture ? models.object.materials[0].emissiveTexture.descriptor : textures.empty.descriptor
+				};
+
+				std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};
+				for (size_t i = 0; i < imageDescriptors.size(); i++) {
+					writeDescriptorSets[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					writeDescriptorSets[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+					writeDescriptorSets[i].descriptorCount = 1;
+					writeDescriptorSets[i].dstSet = material.descriptorSet;
+					writeDescriptorSets[i].dstBinding = static_cast<uint32_t>(i);
+					writeDescriptorSets[i].pImageInfo = &imageDescriptors[i];
+				}
+
+				vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
+			}
+		}
+
+		// Skybox (fixed set)
+		{
+			VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+			descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			descriptorSetAllocInfo.descriptorPool = descriptorPool;
+			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.scene;
+			descriptorSetAllocInfo.descriptorSetCount = 1;
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.skybox));
+
 			std::array<VkWriteDescriptorSet, 3> writeDescriptorSets{};
 
 			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -414,10 +513,18 @@ public:
 		dynamicStateCI.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
 
 		// Pipeline layout
+		std::array<VkDescriptorSetLayout, 2> setLayouts = { 
+			descriptorSetLayouts.scene, descriptorSetLayouts.material 
+		};
 		VkPipelineLayoutCreateInfo pipelineLayoutCI{};
 		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutCI.setLayoutCount = 1;
-		pipelineLayoutCI.pSetLayouts = &descriptorSetLayout;
+		pipelineLayoutCI.setLayoutCount = 2;
+		pipelineLayoutCI.pSetLayouts = setLayouts.data();
+		VkPushConstantRange pushConstantRange{};
+		pushConstantRange.size = sizeof(PushConstBlockMaterial);
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		pipelineLayoutCI.pushConstantRangeCount = 1;
+		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
 
 		// Vertex bindings an attributes
@@ -453,6 +560,7 @@ public:
 		pipelineCI.pStages = shaderStages.data();
 
 		// Skybox pipeline (background cube)
+		rasterizationStateCI.cullMode = VK_CULL_MODE_FRONT_BIT;
 		shaderStages = {
 			loadShader(device, "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
 			loadShader(device, "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
@@ -463,7 +571,7 @@ public:
 		}
 
 		// PBR pipeline
-		rasterizationStateCI.cullMode = VK_CULL_MODE_FRONT_BIT;
+		rasterizationStateCI.cullMode = VK_CULL_MODE_BACK_BIT;
 		shaderStages = {
 			loadShader(device, "pbr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
 			loadShader(device, "pbr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)

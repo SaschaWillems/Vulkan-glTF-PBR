@@ -313,6 +313,7 @@ namespace vkglTF
 		vkglTF::Texture normalTexture;
 		vkglTF::Texture occlusionTexture;
 		vkglTF::Texture emissiveTexture;
+		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		void destroy(VkDevice device) {
 			if (hasBaseColorTexture) { baseColorTexture.destroy(); }
 			if (hasMetallicRoughnessTexture) { metallicRoughnessTexture.destroy(); }
@@ -489,7 +490,6 @@ namespace vkglTF
 				return;
 			}
 
-			float scale = 1.0f;
 			size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
 			size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
 			indices.count = static_cast<uint32_t>(indexBuffer.size());

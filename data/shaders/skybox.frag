@@ -2,11 +2,11 @@
 
 layout (binding = 2) uniform samplerCube samplerEnv;
 
-layout (location = 0) in vec3 inUVW;
+layout (set = 0, location = 0) in vec3 inUVW;
 
-layout (location = 0) out vec4 outColor;
+layout (set = 0, location = 0) out vec4 outColor;
 
-layout (binding = 1) uniform UBOParams {
+layout (set = 0, binding = 1) uniform UBOParams {
 	vec4 _pad0;
 	float exposure;
 	float gamma;

@@ -4,28 +4,40 @@ layout (location = 0) in vec3 inWorldPos;
 layout (location = 1) in vec3 inNormal;
 layout (location = 2) in vec2 inUV;
 
-layout (binding = 0) uniform UBO {
+// Scene bindings
+
+layout (set = 0, binding = 0) uniform UBO {
 	mat4 projection;
 	mat4 model;
 	mat4 view;
 	vec3 camPos;
 } ubo;
 
-layout (binding = 1) uniform UBOParams {
+layout (set = 0, binding = 1) uniform UBOParams {
 	vec4 lightDir;
 	float exposure;
 	float gamma;
 } uboParams;
 
-layout (binding = 2) uniform samplerCube samplerIrradiance;
-layout (binding = 3) uniform sampler2D samplerBRDFLUT;
-layout (binding = 4) uniform samplerCube prefilteredMap;
+layout (set = 0, binding = 2) uniform samplerCube samplerIrradiance;
+layout (set = 0, binding = 3) uniform samplerCube prefilteredMap;
+layout (set = 0, binding = 4) uniform sampler2D samplerBRDFLUT;
 
-layout (binding = 5) uniform sampler2D albedoMap;
-layout (binding = 6) uniform sampler2D normalMap;
-layout (binding = 7) uniform sampler2D aoMap;
-layout (binding = 8) uniform sampler2D metallicMap;
-layout (binding = 9) uniform sampler2D emissiveMap;
+// Material bindings
+
+layout (set = 1, binding = 0) uniform sampler2D albedoMap;
+layout (set = 1, binding = 1) uniform sampler2D normalMap;
+layout (set = 1, binding = 2) uniform sampler2D aoMap;
+layout (set = 1, binding = 3) uniform sampler2D metallicMap;
+layout (set = 1, binding = 4) uniform sampler2D emissiveMap;
+
+layout (push_constant) uniform Material {
+	float hasBaseColorTexture;
+	float hasMetallicRoughnessTexture;
+	float hasNormalTexture;
+	float hasOcclusionTexture;
+	float hasEmissiveTexture;
+} material;
 
 layout (location = 0) out vec4 outColor;
 
@@ -132,11 +144,13 @@ vec3 perturbNormal()
 
 void main()
 {		
-	vec3 N = perturbNormal();
+	
+	vec3 N = (material.hasNormalTexture == 1.0f) ? perturbNormal() : normalize(inNormal);
 	vec3 V = normalize(ubo.camPos - inWorldPos);
 	vec3 R = reflect(-V, N); 
 
 	float metallic = texture(metallicMap, inUV).b;
+	//float roughness = clamp(texture(metallicMap, inUV).g, 0.04, 1.0);
 	float roughness = texture(metallicMap, inUV).g;
 
 	vec3 F0 = vec3(0.04); 
@@ -159,13 +173,10 @@ void main()
 
 	// Ambient part
 	vec3 kD = 1.0 - F;
-	kD *= 1.0 - metallic;	  
-	vec3 ambient = (kD * diffuse + specular) * texture(aoMap, inUV).rrr;
-	
+	kD *= 1.0 - metallic;
+	float ao = (material.hasOcclusionTexture == 1.0f) ? texture(aoMap, inUV).r : 1.0f;
+	vec3 ambient = (kD * diffuse + specular) * ao;
 	vec3 color = ambient + Lo;
-
-	// Emissive parts
-	vec3 emissive = texture(emissiveMap, inUV).rgb;// * u_EmissiveFactor;
 
 	// Tone mapping
 	color = Uncharted2Tonemap(color * uboParams.exposure);
@@ -173,7 +184,10 @@ void main()
 	// Gamma correction
 	color = pow(color, vec3(1.0f / uboParams.gamma));
 
-	color += emissive;
+	if (material.hasEmissiveTexture == 1.0f) {
+		vec3 emissive = texture(emissiveMap, inUV).rgb;// * u_EmissiveFactor;
+		color += emissive;
+	}
 
 	outColor = vec4(color, 1.0);
 }
