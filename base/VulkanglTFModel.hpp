@@ -492,7 +492,7 @@ namespace vkglTF
 			if (fileLoaded) {
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
-					const tinygltf::Node node = gltfModel.nodes[i];
+					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
 					loadNode(node, gltfModel, indexBuffer, vertexBuffer, scale);
 				}
 			}
