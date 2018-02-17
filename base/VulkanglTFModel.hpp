@@ -448,6 +448,14 @@ namespace vkglTF
 							}
 							break;
 						}
+						case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE: {
+							uint8_t *buf = new uint8_t[accessor.count];
+							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint8_t));
+							for (size_t index = 0; index < accessor.count; index++) {
+								indexBuffer.push_back(buf[index] + vertexStart);
+							}
+							break;
+						}
 						default:
 							std::cerr << "Index component type " << accessor.componentType << " not supported!" << std::endl;
 							return;
