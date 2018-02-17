@@ -244,16 +244,27 @@ public:
 			};
 			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 2, descriptorsets.data(), 0, NULL);
 
-			PushConstBlockMaterial pushConstBlockMaterial{
-				static_cast<float>(models.object.materials[0].hasBaseColorTexture),
-				static_cast<float>(models.object.materials[0].hasMetallicRoughnessTexture),
-				static_cast<float>(models.object.materials[0].hasNormalTexture),
-				static_cast<float>(models.object.materials[0].hasOcclusionTexture),
-				static_cast<float>(models.object.materials[0].hasEmissiveTexture)
-			};
-			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
+			//models.object.draw(drawCmdBuffers[i]);
 
-			models.object.draw(drawCmdBuffers[i]);
+			vkglTF::Model &model = models.object;
+			vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &model.vertices.buffer, offsets);
+			vkCmdBindIndexBuffer(drawCmdBuffers[i], model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+			for (auto primitive : model.primitives) {
+				vkglTF::Material &material = model.materials[primitive.materialIndex];
+				descriptorsets[1] = material.descriptorSet;
+				vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 2, descriptorsets.data(), 0, NULL);
+
+				PushConstBlockMaterial pushConstBlockMaterial{
+					static_cast<float>(material.hasBaseColorTexture),
+					static_cast<float>(material.hasMetallicRoughnessTexture),
+					static_cast<float>(material.hasNormalTexture),
+					static_cast<float>(material.hasOcclusionTexture),
+					static_cast<float>(material.hasEmissiveTexture)
+				};
+				vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
+
+				vkCmdDrawIndexed(drawCmdBuffers[i], primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+			}
 
 			vkCmdEndRenderPass(drawCmdBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
