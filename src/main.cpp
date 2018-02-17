@@ -402,11 +402,11 @@ public:
 				VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &material.descriptorSet));
 
 				std::vector<VkDescriptorImageInfo> imageDescriptors = {
-					material.hasBaseColorTexture ? models.object.materials[0].baseColorTexture.descriptor : textures.empty.descriptor,
-					material.hasNormalTexture ? models.object.materials[0].normalTexture.descriptor : textures.empty.descriptor,
-					material.hasOcclusionTexture ? models.object.materials[0].occlusionTexture.descriptor : textures.empty.descriptor,
-					material.hasMetallicRoughnessTexture ? models.object.materials[0].metallicRoughnessTexture.descriptor : textures.empty.descriptor,
-					material.hasEmissiveTexture ? models.object.materials[0].emissiveTexture.descriptor : textures.empty.descriptor
+					material.hasBaseColorTexture ? material.baseColorTexture.descriptor : textures.empty.descriptor,
+					material.hasNormalTexture ? material.normalTexture.descriptor : textures.empty.descriptor,
+					material.hasOcclusionTexture ? material.occlusionTexture.descriptor : textures.empty.descriptor,
+					material.hasMetallicRoughnessTexture ? material.metallicRoughnessTexture.descriptor : textures.empty.descriptor,
+					material.hasEmissiveTexture ? material.emissiveTexture.descriptor : textures.empty.descriptor
 				};
 
 				std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};
