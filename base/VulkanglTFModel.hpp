@@ -364,12 +364,12 @@ namespace vkglTF
 			}
 		};
 
-		void loadNode(const tinygltf::Node &node, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer)
+		void loadNode(const tinygltf::Node &node, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float scale)
 		{
 			// Parent node with children
 			if (node.children.size() > 0) {
 				for (auto i = 0; i < node.children.size(); i++) {
-					loadNode(model.nodes[node.children[i]], model, indexBuffer, vertexBuffer);
+					loadNode(model.nodes[node.children[i]], model, indexBuffer, vertexBuffer, scale);
 				}
 			}
 			// Node contains mesh data
@@ -383,6 +383,10 @@ namespace vkglTF
 					uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
 					uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
 					uint32_t indexCount = 0;
+					glm::vec3 translation = glm::vec3(0.0f);
+					if (node.translation.size() == 3) {						
+						translation = glm::make_vec3(node.translation.data());
+					}
 					// Vertices
 					{
 						const float *bufferPos = nullptr;
@@ -410,7 +414,7 @@ namespace vkglTF
 
 						for (size_t v = 0; v < posAccessor.count; v++) {
 							Vertex vert{};
-							vert.pos = glm::make_vec3(&bufferPos[v * 3]);
+							vert.pos = (glm::make_vec3(&bufferPos[v * 3]) + translation) * scale;
 							vert.normal = bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f);
 							vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
 							// Vulkan coordinate system
@@ -454,7 +458,7 @@ namespace vkglTF
 			}
 		}
 
-		void loadFromFile(std::string filename, vks::VulkanDevice *device, VkQueue transferQueue)
+		void loadFromFile(std::string filename, vks::VulkanDevice *device, VkQueue transferQueue, float scale = 1.0f)
 		{
 			tinygltf::Model gltfModel;
 			tinygltf::TinyGLTF gltfContext;
@@ -481,7 +485,7 @@ namespace vkglTF
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
 					const tinygltf::Node node = gltfModel.nodes[i];
-					loadNode(node, gltfModel, indexBuffer, vertexBuffer);
+					loadNode(node, gltfModel, indexBuffer, vertexBuffer, scale);
 				}
 			}
 			else {
