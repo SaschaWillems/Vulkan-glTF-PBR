@@ -568,23 +568,34 @@ namespace vkglTF
 				vkglTF::Material material;
 				if (mat.values.find("baseColorTexture") != mat.values.end()) {
 					material.hasBaseColorTexture = true;
-					material.baseColorTexture.fromglTfImage(gltfModel.images[mat.values["baseColorTexture"].TextureIndex()], device, transferQueue);
+					uint32_t index = gltfModel.textures[mat.values["baseColorTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					std::cout << gltfModel.images[index].uri << std::endl;
+					material.baseColorTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
 				}
 				if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
 					material.hasMetallicRoughnessTexture = true;
-					material.metallicRoughnessTexture.fromglTfImage(gltfModel.images[mat.values["metallicRoughnessTexture"].TextureIndex()], device, transferQueue);
+					uint32_t index = gltfModel.textures[mat.values["metallicRoughnessTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					material.metallicRoughnessTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
 				}
 				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
 					material.hasNormalTexture = true;
-					material.normalTexture.fromglTfImage(gltfModel.images[mat.additionalValues["normalTexture"].TextureIndex()], device, transferQueue);
+					uint32_t index = gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					material.normalTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
 				}
 				if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
 					material.hasEmissiveTexture = true;
-					material.emissiveTexture.fromglTfImage(gltfModel.images[mat.additionalValues["emissiveTexture"].TextureIndex()], device, transferQueue);
+					uint32_t index = gltfModel.textures[mat.additionalValues["emissiveTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					material.emissiveTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
 				}
 				if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
 					material.hasOcclusionTexture = true;
-					material.occlusionTexture.fromglTfImage(gltfModel.images[mat.additionalValues["occlusionTexture"].TextureIndex()], device, transferQueue);
+					uint32_t index = gltfModel.textures[mat.additionalValues["occlusionTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					material.occlusionTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
 				}
 				materials.push_back(material);
 			}
