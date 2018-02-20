@@ -200,9 +200,16 @@ public:
 		VkCommandBufferBeginInfo cmdBufferBeginInfo{};
 		cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-		VkClearValue clearValues[2];
-		clearValues[0].color = { { 0.1f, 0.1f, 0.1f, 1.0f } };
-		clearValues[1].depthStencil = { 1.0f, 0 };
+		VkClearValue clearValues[3];
+		if (settings.multiSampling) {
+			clearValues[0].color = { { 1.0f, 1.0f, 1.0f, 1.0f } };
+			clearValues[1].color = { { 1.0f, 1.0f, 1.0f, 1.0f } };
+			clearValues[2].depthStencil = { 1.0f, 0 };
+		}
+		else {
+			clearValues[0].color = { { 0.1f, 0.1f, 0.1f, 1.0f } };
+			clearValues[1].depthStencil = { 1.0f, 0 };
+		}
 
 		VkRenderPassBeginInfo renderPassBeginInfo{};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -211,7 +218,7 @@ public:
 		renderPassBeginInfo.renderArea.offset.y = 0;
 		renderPassBeginInfo.renderArea.extent.width = width;
 		renderPassBeginInfo.renderArea.extent.height = height;
-		renderPassBeginInfo.clearValueCount = 2;
+		renderPassBeginInfo.clearValueCount = settings.multiSampling ? 3 : 2;
 		renderPassBeginInfo.pClearValues = clearValues;
 
 		for (size_t i = 0; i < drawCmdBuffers.size(); ++i) {

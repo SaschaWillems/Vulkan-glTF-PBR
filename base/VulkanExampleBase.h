@@ -65,6 +65,18 @@ private:
 	PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallback;
 	PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallback;
 	VkDebugReportCallbackEXT debugReportCallback;
+	struct MultisampleTarget {
+		struct {
+			VkImage image;
+			VkImageView view;
+			VkDeviceMemory memory;
+		} color;
+		struct {
+			VkImage image;
+			VkImageView view;
+			VkDeviceMemory memory;
+		} depth;
+	} multisampleTarget;
 protected:
 	VkInstance instance;
 	VkPhysicalDevice physicalDevice;
@@ -102,6 +114,8 @@ public:
 		bool validation = false;
 		bool fullscreen = false;
 		bool vsync = false;
+		bool multiSampling = true;
+		VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_4_BIT;
 	} settings;
 	
 	struct DepthStencil {
