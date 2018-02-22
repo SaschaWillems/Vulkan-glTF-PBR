@@ -302,7 +302,10 @@ namespace vkglTF
 	/*
 		glTF material class
 	*/
-	struct Material {
+	struct Material {		
+		enum AlphaMode{ ALPHAMODE_OPAQUE, ALPHAMODE_MASK, ALPHAMODE_BLEND };
+		AlphaMode alphaMode = ALPHAMODE_OPAQUE;
+		float alphaCutoff = 1.0f;
 		bool hasBaseColorTexture = false;
 		bool hasMetallicRoughnessTexture = false;
 		bool hasNormalTexture = false;
@@ -614,6 +617,18 @@ namespace vkglTF
 					uint32_t index = gltfModel.textures[mat.additionalValues["occlusionTexture"].TextureIndex()].source;
 					assert(index < gltfModel.images.size());
 					material.occlusionTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+				}
+				if (mat.additionalValues.find("alphaMode") != mat.additionalValues.end()) {
+					tinygltf::Parameter param = mat.additionalValues["alphaMode"];
+					if (param.string_value == "BLEND") {
+						material.alphaMode = Material::ALPHAMODE_BLEND;
+					}
+					if (param.string_value == "MASK") {
+						material.alphaMode = Material::ALPHAMODE_MASK;
+					}
+				}
+				if (mat.additionalValues.find("alphaCutoff") != mat.additionalValues.end()) {
+					material.alphaCutoff = static_cast<float>(mat.additionalValues["alphaCutoff"].Factor());
 				}
 				materials.push_back(material);
 			}
