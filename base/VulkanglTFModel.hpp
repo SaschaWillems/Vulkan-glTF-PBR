@@ -327,6 +327,15 @@ namespace vkglTF
 	};
 
 	/*
+		glTF primitive class
+	*/
+	struct Primitive {
+		uint32_t firstIndex;
+		uint32_t indexCount;
+		Material &material;
+	};
+
+	/*
 		glTF model loading and rendering class
 	*/
 	struct Model {
@@ -347,11 +356,6 @@ namespace vkglTF
 			VkDeviceMemory memory;
 		} indices;
 
-		struct Primitive {
-			uint32_t firstIndex;
-			uint32_t indexCount;
-			int32_t materialIndex;
-		};
 		std::vector<Primitive> primitives;
 
 		std::vector<Material> materials;
@@ -482,8 +486,61 @@ namespace vkglTF
 							return;
 						}
 					}
-					primitives.push_back({ indexStart, indexCount, primitive.material });
+					primitives.push_back({ indexStart, indexCount, materials[primitive.material] });
 				}
+			}
+		}
+
+		void loadMaterials(tinygltf::Model &gltfModel, vks::VulkanDevice *device, VkQueue transferQueue)
+		{
+			// Materials
+			// TODO: Load images separately and only index material instead of loading multiple times
+			for (tinygltf::Material &mat : gltfModel.materials) {
+				vkglTF::Material material;
+				if (mat.values.find("baseColorTexture") != mat.values.end()) {
+					material.hasBaseColorTexture = true;
+					uint32_t index = gltfModel.textures[mat.values["baseColorTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					std::cout << gltfModel.images[index].uri << std::endl;
+					material.baseColorTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+				}
+				if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
+					material.hasMetallicRoughnessTexture = true;
+					uint32_t index = gltfModel.textures[mat.values["metallicRoughnessTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					material.metallicRoughnessTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+				}
+				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
+					material.hasNormalTexture = true;
+					uint32_t index = gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					material.normalTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+				}
+				if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
+					material.hasEmissiveTexture = true;
+					uint32_t index = gltfModel.textures[mat.additionalValues["emissiveTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					material.emissiveTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+				}
+				if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
+					material.hasOcclusionTexture = true;
+					uint32_t index = gltfModel.textures[mat.additionalValues["occlusionTexture"].TextureIndex()].source;
+					assert(index < gltfModel.images.size());
+					material.occlusionTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+				}
+				if (mat.additionalValues.find("alphaMode") != mat.additionalValues.end()) {
+					tinygltf::Parameter param = mat.additionalValues["alphaMode"];
+					if (param.string_value == "BLEND") {
+						material.alphaMode = Material::ALPHAMODE_BLEND;
+					}
+					if (param.string_value == "MASK") {
+						material.alphaMode = Material::ALPHAMODE_MASK;
+					}
+				}
+				if (mat.additionalValues.find("alphaCutoff") != mat.additionalValues.end()) {
+					material.alphaCutoff = static_cast<float>(mat.additionalValues["alphaCutoff"].Factor());
+				}
+				materials.push_back(material);
 			}
 		}
 
@@ -511,6 +568,7 @@ namespace vkglTF
 			std::vector<Vertex> vertexBuffer;
 
 			if (fileLoaded) {
+				loadMaterials(gltfModel, device, transferQueue);
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
 					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
@@ -526,6 +584,8 @@ namespace vkglTF
 			size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
 			size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
 			indices.count = static_cast<uint32_t>(indexBuffer.size());
+
+			assert((vertexBufferSize > 0) && (indexBufferSize > 0));
 
 			struct StagingBuffer {
 				VkBuffer buffer;
@@ -583,55 +643,6 @@ namespace vkglTF
 			vkFreeMemory(device->logicalDevice, vertexStaging.memory, nullptr);
 			vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
 			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
-
-			// Materials
-			for (tinygltf::Material &mat : gltfModel.materials) {
-				vkglTF::Material material;
-				if (mat.values.find("baseColorTexture") != mat.values.end()) {
-					material.hasBaseColorTexture = true;
-					uint32_t index = gltfModel.textures[mat.values["baseColorTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					std::cout << gltfModel.images[index].uri << std::endl;
-					material.baseColorTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
-				}
-				if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
-					material.hasMetallicRoughnessTexture = true;
-					uint32_t index = gltfModel.textures[mat.values["metallicRoughnessTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					material.metallicRoughnessTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
-				}
-				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
-					material.hasNormalTexture = true;
-					uint32_t index = gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					material.normalTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
-				}
-				if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
-					material.hasEmissiveTexture = true;
-					uint32_t index = gltfModel.textures[mat.additionalValues["emissiveTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					material.emissiveTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
-				}
-				if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
-					material.hasOcclusionTexture = true;
-					uint32_t index = gltfModel.textures[mat.additionalValues["occlusionTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					material.occlusionTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
-				}
-				if (mat.additionalValues.find("alphaMode") != mat.additionalValues.end()) {
-					tinygltf::Parameter param = mat.additionalValues["alphaMode"];
-					if (param.string_value == "BLEND") {
-						material.alphaMode = Material::ALPHAMODE_BLEND;
-					}
-					if (param.string_value == "MASK") {
-						material.alphaMode = Material::ALPHAMODE_MASK;
-					}
-				}
-				if (mat.additionalValues.find("alphaCutoff") != mat.additionalValues.end()) {
-					material.alphaCutoff = static_cast<float>(mat.additionalValues["alphaCutoff"].Factor());
-				}
-				materials.push_back(material);
-			}
 		}
 
 		void draw(VkCommandBuffer commandBuffer)
