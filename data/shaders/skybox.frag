@@ -27,7 +27,7 @@ vec3 Uncharted2Tonemap(vec3 color)
 
 void main() 
 {
-	vec3 color = textureLod(samplerEnv, inUVW, 1.5).rgb;
+	vec3 color = textureLod(samplerEnv, inUVW, 0.5).rgb;
 
 	// Tone mapping
 	color = Uncharted2Tonemap(color * uboParams.exposure);
@@ -35,5 +35,5 @@ void main()
 	// Gamma correction
 	color = pow(color, vec3(1.0f / uboParams.gamma));
 	
-	outColor = vec4(color * 0.75, 1.0);
+	outColor = vec4(color * 1.0, 1.0);
 }

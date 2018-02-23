@@ -37,6 +37,8 @@ layout (push_constant) uniform Material {
 	float hasNormalTexture;
 	float hasOcclusionTexture;
 	float hasEmissiveTexture;
+	float alphaMask;
+	float alphaMaskCutoff;
 } material;
 
 layout (location = 0) out vec4 outColor;
@@ -144,14 +146,18 @@ vec3 perturbNormal()
 
 void main()
 {		
-	
+	if (material.alphaMask == 1.0f) {
+		if (texture(albedoMap, inUV).a < material.alphaMaskCutoff) {
+			discard;
+		}
+	}
+
 	vec3 N = (material.hasNormalTexture == 1.0f) ? perturbNormal() : normalize(inNormal);
 	vec3 V = normalize(ubo.camPos - inWorldPos);
-	vec3 R = reflect(-V, N); 
+	vec3 R = -normalize(reflect(V, N));
 
 	float metallic = texture(metallicMap, inUV).b;
-	//float roughness = clamp(texture(metallicMap, inUV).g, 0.04, 1.0);
-	float roughness = texture(metallicMap, inUV).g;
+	float roughness = clamp(texture(metallicMap, inUV).g, 0.04, 1.0);
 
 	vec3 F0 = vec3(0.04); 
 	F0 = mix(F0, ALBEDO, metallic);
@@ -189,5 +195,7 @@ void main()
 		color += emissive;
 	}
 
-	outColor = vec4(color, 1.0);
+	float a = texture(albedoMap, inUV).a;
+
+	outColor = vec4(color, a);
 }
