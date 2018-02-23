@@ -158,6 +158,8 @@ public:
 		float hasNormalTexture;
 		float hasOcclusionTexture;
 		float hasEmissiveTexture;
+		float alphaMask;
+		float alphaMaskCutoff;
 	} pushConstBlockMaterial;
 
 	VulkanExample() : VulkanExampleBase()
@@ -206,11 +208,11 @@ public:
 
 		// Pass material parameters as push constants
 		PushConstBlockMaterial pushConstBlockMaterial{
-			static_cast<float>(primitive.material.hasBaseColorTexture),
-			static_cast<float>(primitive.material.hasMetallicRoughnessTexture),
-			static_cast<float>(primitive.material.hasNormalTexture),
-			static_cast<float>(primitive.material.hasOcclusionTexture),
-			static_cast<float>(primitive.material.hasEmissiveTexture),
+			static_cast<float>(primitive.material.baseColorTexture != nullptr),
+			static_cast<float>(primitive.material.metallicRoughnessTexture != nullptr),
+			static_cast<float>(primitive.material.normalTexture != nullptr),
+			static_cast<float>(primitive.material.occlusionTexture != nullptr),
+			static_cast<float>(primitive.material.emissiveTexture != nullptr),
 			static_cast<float>(primitive.material.alphaMode == vkglTF::Material::ALPHAMODE_MASK),
 			primitive.material.alphaCutoff
 		};
@@ -436,11 +438,11 @@ public:
 				VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &material.descriptorSet));
 
 				std::vector<VkDescriptorImageInfo> imageDescriptors = {
-					material.hasBaseColorTexture ? material.baseColorTexture.descriptor : textures.empty.descriptor,
-					material.hasNormalTexture ? material.normalTexture.descriptor : textures.empty.descriptor,
-					material.hasOcclusionTexture ? material.occlusionTexture.descriptor : textures.empty.descriptor,
-					material.hasMetallicRoughnessTexture ? material.metallicRoughnessTexture.descriptor : textures.empty.descriptor,
-					material.hasEmissiveTexture ? material.emissiveTexture.descriptor : textures.empty.descriptor
+					material.baseColorTexture ? material.baseColorTexture->descriptor : textures.empty.descriptor,
+					material.normalTexture ? material.normalTexture->descriptor : textures.empty.descriptor,
+					material.occlusionTexture ? material.occlusionTexture->descriptor : textures.empty.descriptor,
+					material.metallicRoughnessTexture ? material.metallicRoughnessTexture->descriptor : textures.empty.descriptor,
+					material.emissiveTexture ? material.emissiveTexture->descriptor : textures.empty.descriptor
 				};
 
 				std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};

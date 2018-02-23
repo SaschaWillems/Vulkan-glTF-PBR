@@ -306,24 +306,12 @@ namespace vkglTF
 		enum AlphaMode{ ALPHAMODE_OPAQUE, ALPHAMODE_MASK, ALPHAMODE_BLEND };
 		AlphaMode alphaMode = ALPHAMODE_OPAQUE;
 		float alphaCutoff = 1.0f;
-		bool hasBaseColorTexture = false;
-		bool hasMetallicRoughnessTexture = false;
-		bool hasNormalTexture = false;
-		bool hasOcclusionTexture = false;
-		bool hasEmissiveTexture = false;
-		vkglTF::Texture baseColorTexture;
-		vkglTF::Texture metallicRoughnessTexture;
-		vkglTF::Texture normalTexture;
-		vkglTF::Texture occlusionTexture;
-		vkglTF::Texture emissiveTexture;
+		vkglTF::Texture *baseColorTexture;
+		vkglTF::Texture *metallicRoughnessTexture;
+		vkglTF::Texture *normalTexture;
+		vkglTF::Texture *occlusionTexture;
+		vkglTF::Texture *emissiveTexture;
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
-		void destroy(VkDevice device) {
-			if (hasBaseColorTexture) { baseColorTexture.destroy(); }
-			if (hasMetallicRoughnessTexture) { metallicRoughnessTexture.destroy(); }
-			if (hasNormalTexture) { normalTexture.destroy(); }
-			if (hasOcclusionTexture) { occlusionTexture.destroy(); }
-			if (hasEmissiveTexture) { emissiveTexture.destroy(); }
-		}
 	};
 
 	/*
@@ -358,6 +346,7 @@ namespace vkglTF
 
 		std::vector<Primitive> primitives;
 
+		std::vector<Texture> textures;
 		std::vector<Material> materials;
 
 		void destroy(VkDevice device)
@@ -366,8 +355,8 @@ namespace vkglTF
 			vkFreeMemory(device, vertices.memory, nullptr);
 			vkDestroyBuffer(device, indices.buffer, nullptr);
 			vkFreeMemory(device, indices.memory, nullptr);
-			for (auto material : materials) {
-				material.destroy(device);
+			for (auto texture : textures) {
+				texture.destroy();
 			}
 		};
 
@@ -491,42 +480,33 @@ namespace vkglTF
 			}
 		}
 
+		void loadImages(tinygltf::Model &gltfModel, vks::VulkanDevice *device, VkQueue transferQueue)
+		{
+			for (tinygltf::Image &image : gltfModel.images) {
+				vkglTF::Texture texture;
+				texture.fromglTfImage(image, device, transferQueue);
+				textures.push_back(texture);
+			}
+		}
+
 		void loadMaterials(tinygltf::Model &gltfModel, vks::VulkanDevice *device, VkQueue transferQueue)
 		{
-			// Materials
-			// TODO: Load images separately and only index material instead of loading multiple times
 			for (tinygltf::Material &mat : gltfModel.materials) {
-				vkglTF::Material material;
+				vkglTF::Material material{};
 				if (mat.values.find("baseColorTexture") != mat.values.end()) {
-					material.hasBaseColorTexture = true;
-					uint32_t index = gltfModel.textures[mat.values["baseColorTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					std::cout << gltfModel.images[index].uri << std::endl;
-					material.baseColorTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+					material.baseColorTexture = &textures[gltfModel.textures[mat.values["baseColorTexture"].TextureIndex()].source];
 				}
 				if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
-					material.hasMetallicRoughnessTexture = true;
-					uint32_t index = gltfModel.textures[mat.values["metallicRoughnessTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					material.metallicRoughnessTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+					material.metallicRoughnessTexture = &textures[gltfModel.textures[mat.values["metallicRoughnessTexture"].TextureIndex()].source];
 				}
 				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
-					material.hasNormalTexture = true;
-					uint32_t index = gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					material.normalTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+					material.normalTexture = &textures[gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source];
 				}
 				if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
-					material.hasEmissiveTexture = true;
-					uint32_t index = gltfModel.textures[mat.additionalValues["emissiveTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					material.emissiveTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+					material.emissiveTexture = &textures[gltfModel.textures[mat.additionalValues["emissiveTexture"].TextureIndex()].source];
 				}
 				if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
-					material.hasOcclusionTexture = true;
-					uint32_t index = gltfModel.textures[mat.additionalValues["occlusionTexture"].TextureIndex()].source;
-					assert(index < gltfModel.images.size());
-					material.occlusionTexture.fromglTfImage(gltfModel.images[index], device, transferQueue);
+					material.occlusionTexture = &textures[gltfModel.textures[mat.additionalValues["occlusionTexture"].TextureIndex()].source];
 				}
 				if (mat.additionalValues.find("alphaMode") != mat.additionalValues.end()) {
 					tinygltf::Parameter param = mat.additionalValues["alphaMode"];
@@ -568,6 +548,7 @@ namespace vkglTF
 			std::vector<Vertex> vertexBuffer;
 
 			if (fileLoaded) {
+				loadImages(gltfModel, device, transferQueue);
 				loadMaterials(gltfModel, device, transferQueue);
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
