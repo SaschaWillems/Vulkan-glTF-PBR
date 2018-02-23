@@ -37,6 +37,8 @@ layout (push_constant) uniform Material {
 	float hasNormalTexture;
 	float hasOcclusionTexture;
 	float hasEmissiveTexture;
+	float metallicFactor;
+	float roughnessFactor;
 	float alphaMask;
 	float alphaMaskCutoff;
 } material;
@@ -156,8 +158,12 @@ void main()
 	vec3 V = normalize(ubo.camPos - inWorldPos);
 	vec3 R = -normalize(reflect(V, N));
 
-	float metallic = texture(metallicMap, inUV).b;
-	float roughness = clamp(texture(metallicMap, inUV).g, 0.04, 1.0);
+	float metallic = material.metallicFactor;
+	float roughness = material.roughnessFactor;
+	if (material.hasMetallicRoughnessTexture == 1.0f) {
+		metallic *= texture(metallicMap, inUV).b;
+		roughness *= clamp(texture(metallicMap, inUV).g, 0.04, 1.0);
+	}
 
 	vec3 F0 = vec3(0.04); 
 	F0 = mix(F0, ALBEDO, metallic);

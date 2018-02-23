@@ -158,6 +158,8 @@ public:
 		float hasNormalTexture;
 		float hasOcclusionTexture;
 		float hasEmissiveTexture;
+		float metallicFactor;
+		float roughnessFactor;
 		float alphaMask;
 		float alphaMaskCutoff;
 	} pushConstBlockMaterial;
@@ -213,6 +215,8 @@ public:
 			static_cast<float>(primitive.material.normalTexture != nullptr),
 			static_cast<float>(primitive.material.occlusionTexture != nullptr),
 			static_cast<float>(primitive.material.emissiveTexture != nullptr),
+			primitive.material.metallicFactor,
+			primitive.material.roughnessFactor,
 			static_cast<float>(primitive.material.alphaMode == vkglTF::Material::ALPHAMODE_MASK),
 			primitive.material.alphaCutoff
 		};

@@ -306,6 +306,8 @@ namespace vkglTF
 		enum AlphaMode{ ALPHAMODE_OPAQUE, ALPHAMODE_MASK, ALPHAMODE_BLEND };
 		AlphaMode alphaMode = ALPHAMODE_OPAQUE;
 		float alphaCutoff = 1.0f;
+		float metallicFactor = 1.0f;
+		float roughnessFactor = 1.0f;
 		vkglTF::Texture *baseColorTexture;
 		vkglTF::Texture *metallicRoughnessTexture;
 		vkglTF::Texture *normalTexture;
@@ -499,6 +501,12 @@ namespace vkglTF
 				if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
 					material.metallicRoughnessTexture = &textures[gltfModel.textures[mat.values["metallicRoughnessTexture"].TextureIndex()].source];
 				}
+				if (mat.values.find("roughnessFactor") != mat.values.end()) {
+					material.roughnessFactor = static_cast<float>(mat.values["roughnessFactor"].Factor());
+				}
+				if (mat.values.find("metallicFactor") != mat.values.end()) {
+					material.metallicFactor = static_cast<float>(mat.values["metallicFactor"].Factor());
+				}				
 				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
 					material.normalTexture = &textures[gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source];
 				}
