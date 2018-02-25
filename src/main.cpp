@@ -1499,7 +1499,6 @@ public:
 		uboMatrices.view = camera.matrices.view;
 		uboMatrices.model = glm::mat4(1.0f);
 		uboMatrices.model = glm::rotate(uboMatrices.model, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-		uboMatrices.model = glm::rotate(uboMatrices.model, -0.5f * (float)M_PI, glm::vec3(1.0f, 0.0f, 0.0f));
 		uboMatrices.camPos = camera.position * -1.0f;
 		memcpy(uniformBuffers.object.mapped, &uboMatrices, sizeof(uboMatrices));
 
