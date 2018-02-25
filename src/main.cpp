@@ -124,6 +124,7 @@ public:
 		glm::mat4 model;
 		glm::mat4 view;
 		glm::vec3 camPos;
+		float flipUV = 1.0f;
 	} uboMatrices;
 
 	struct UBOParams {
