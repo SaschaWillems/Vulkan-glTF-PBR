@@ -362,14 +362,38 @@ namespace vkglTF
 			}
 		};
 
-		void loadNode(const tinygltf::Node &node, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
+		void loadNode(const tinygltf::Node &node, const glm::mat4 &parentMatrix, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
 		{
+			// Generate local node matrix
+			glm::vec3 translation = glm::vec3(0.0f);
+			if (node.translation.size() == 3) {
+				translation = glm::make_vec3(node.translation.data());
+			}
+			glm::mat4 rotation = glm::mat4(1.0f);
+			if (node.rotation.size() == 4) {
+				glm::quat q = glm::make_quat(node.rotation.data());
+				rotation = glm::mat4(q);
+			}
+			glm::vec3 scale = glm::vec3(1.0f);
+			if (node.scale.size() == 3) {
+				scale = glm::make_vec3(node.scale.data());
+			}
+			glm::mat4 localNodeMatrix = glm::mat4(1.0f);
+			if (node.matrix.size() == 16) {
+				localNodeMatrix = glm::make_mat4x4(node.matrix.data());
+			} else {
+				// T * R * S
+				localNodeMatrix = glm::translate(glm::mat4(1.0f), translation) * rotation * glm::scale(glm::mat4(1.0f), scale);
+			}
+			localNodeMatrix = parentMatrix * localNodeMatrix;
+
 			// Parent node with children
 			if (node.children.size() > 0) {
 				for (auto i = 0; i < node.children.size(); i++) {
-					loadNode(model.nodes[node.children[i]], model, indexBuffer, vertexBuffer, globalscale);
+					loadNode(model.nodes[node.children[i]], localNodeMatrix, model, indexBuffer, vertexBuffer, globalscale);
 				}
 			}
+
 			// Node contains mesh data
 			if (node.mesh > -1) {
 				const tinygltf::Mesh mesh = model.meshes[node.mesh];
@@ -381,27 +405,6 @@ namespace vkglTF
 					uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
 					uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
 					uint32_t indexCount = 0;
-					// Create local matrix
-					glm::vec3 translation = glm::vec3(0.0f);
-					if (node.translation.size() == 3) {						
-						translation = glm::make_vec3(node.translation.data());
-					}
-					glm::mat4 rotation = glm::mat4(1.0f);
-					if (node.rotation.size() == 4) {
-						glm::quat q = glm::make_quat(node.rotation.data());
-						rotation = glm::mat4(q);
-					}
-					glm::vec3 scale = glm::vec3(1.0f);
-					if (node.scale.size() == 3) {
-						scale = glm::make_vec3(node.scale.data());
-					}
-					glm::mat4 localMat = glm::mat4(1.0f);
-					if (node.matrix.size() == 16) {
-						localMat = glm::make_mat4x4(node.matrix.data());
-					} else {
-						// T * R * S
-						localMat = glm::translate(glm::mat4(1.0f), translation) * rotation * glm::scale(glm::mat4(1.0f), scale);
-					}
 					// Vertices
 					{
 						const float *bufferPos = nullptr;
@@ -429,9 +432,9 @@ namespace vkglTF
 
 						for (size_t v = 0; v < posAccessor.count; v++) {
 							Vertex vert{};
-							vert.pos = localMat * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
+							vert.pos = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
 							vert.pos *= globalscale;
-							vert.normal = rotation * (glm::vec4(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f), 1.0f));
+							vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
 							vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
 							// Vulkan coordinate system
 							vert.pos.y *= -1.0f;
@@ -561,7 +564,7 @@ namespace vkglTF
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
 					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
-					loadNode(node, gltfModel, indexBuffer, vertexBuffer, scale);
+					loadNode(node, glm::mat4(1.0f), gltfModel, indexBuffer, vertexBuffer, scale);
 				}
 			}
 			else {
