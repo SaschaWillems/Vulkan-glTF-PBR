@@ -17,6 +17,7 @@ layout (set = 0, binding = 1) uniform UBOParams {
 	vec4 lightDir;
 	float exposure;
 	float gamma;
+	float prefilteredCubeMipLevels;
 } uboParams;
 
 layout (set = 0, binding = 2) uniform samplerCube samplerIrradiance;
@@ -91,8 +92,7 @@ vec3 F_SchlickR(float cosTheta, vec3 F0, float roughness)
 
 vec3 prefilteredReflection(vec3 R, float roughness)
 {
-	const float MAX_REFLECTION_LOD = 9.0; // todo: param/const
-	float lod = roughness * MAX_REFLECTION_LOD;
+	float lod = roughness * uboParams.prefilteredCubeMipLevels;
 	float lodf = floor(lod);
 	float lodc = ceil(lod);
 	vec3 a = textureLod(prefilteredMap, R, lodf).rgb;

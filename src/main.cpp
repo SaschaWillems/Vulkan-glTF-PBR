@@ -131,6 +131,7 @@ public:
 		glm::vec4 lightDir = glm::vec4(0.0f, -0.5f, -0.5f, 1.0f);
 		float exposure = 4.5f;
 		float gamma = 2.2f;
+		float prefilteredCubeMipLevels;
 	} uboParams;
 
 	VkPipelineLayout pipelineLayout;
@@ -1441,6 +1442,7 @@ public:
 					break;
 				case PREFILTEREDENV:
 					textures.prefilteredCube = cubemap;
+					uboParams.prefilteredCubeMipLevels = numMips;
 					break;
 			};
 
