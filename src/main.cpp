@@ -152,7 +152,7 @@ public:
 		VkDescriptorSet skybox;
 	} descriptorSets;
 
-	glm::vec3 rotation = glm::vec3(0.0f);
+	glm::vec3 rotation = glm::vec3(0.0f, 135.0f, 0.0f);
 
 	struct PushConstBlockMaterial {
 		float hasBaseColorTexture;
