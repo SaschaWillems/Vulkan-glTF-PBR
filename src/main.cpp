@@ -155,6 +155,7 @@ public:
 	glm::vec3 rotation = glm::vec3(0.0f, 135.0f, 0.0f);
 
 	struct PushConstBlockMaterial {
+		glm::vec4 baseColorFactor;
 		float hasBaseColorTexture;
 		float hasMetallicRoughnessTexture;
 		float hasNormalTexture;
@@ -212,6 +213,7 @@ public:
 
 		// Pass material parameters as push constants
 		PushConstBlockMaterial pushConstBlockMaterial{
+			primitive.material.baseColorFactor,
 			static_cast<float>(primitive.material.baseColorTexture != nullptr),
 			static_cast<float>(primitive.material.metallicRoughnessTexture != nullptr),
 			static_cast<float>(primitive.material.normalTexture != nullptr),

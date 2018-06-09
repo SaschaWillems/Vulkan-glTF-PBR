@@ -308,6 +308,7 @@ namespace vkglTF
 		float alphaCutoff = 1.0f;
 		float metallicFactor = 1.0f;
 		float roughnessFactor = 1.0f;
+		glm::vec4 baseColorFactor = glm::vec4(1.0f);
 		vkglTF::Texture *baseColorTexture;
 		vkglTF::Texture *metallicRoughnessTexture;
 		vkglTF::Texture *normalTexture;
@@ -509,6 +510,9 @@ namespace vkglTF
 				}
 				if (mat.values.find("metallicFactor") != mat.values.end()) {
 					material.metallicFactor = static_cast<float>(mat.values["metallicFactor"].Factor());
+				}
+				if (mat.values.find("baseColorFactor") != mat.values.end()) {
+					material.baseColorFactor = glm::make_vec4(mat.values["baseColorFactor"].ColorFactor().data());
 				}				
 				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
 					material.normalTexture = &textures[gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source];

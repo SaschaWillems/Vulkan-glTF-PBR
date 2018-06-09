@@ -29,7 +29,7 @@ void main()
 {
 	vec3 locPos = vec3(ubo.model * vec4(inPos, 1.0));
 	outWorldPos = locPos;
-	outNormal = mat3(ubo.model) * inNormal;
+	outNormal = normalize(inNormal);
 	outUV = inUV;
 	if (ubo.flipUV == 1.0) {
 		outUV.t = 1.0 - inUV.t;

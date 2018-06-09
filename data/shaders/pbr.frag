@@ -33,6 +33,7 @@ layout (set = 1, binding = 3) uniform sampler2D metallicMap;
 layout (set = 1, binding = 4) uniform sampler2D emissiveMap;
 
 layout (push_constant) uniform Material {
+	vec4 baseColorFactor;
 	float hasBaseColorTexture;
 	float hasMetallicRoughnessTexture;
 	float hasNormalTexture;
@@ -203,5 +204,5 @@ void main()
 
 	float a = texture(albedoMap, inUV).a;
 
-	outColor = vec4(color, a);
+	outColor = vec4(color, a) * material.baseColorFactor;
 }
