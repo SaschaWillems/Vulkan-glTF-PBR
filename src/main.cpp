@@ -145,6 +145,7 @@ public:
 	struct DescriptorSetLayouts {
 		VkDescriptorSetLayout scene;
 		VkDescriptorSetLayout material;
+		VkDescriptorSetLayout node;
 	} descriptorSetLayouts;
 
 	struct DescriptorSets {
@@ -186,6 +187,7 @@ public:
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.scene, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.material, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.node, nullptr);
 
 		models.object.destroy(device);
 		models.skybox.destroy(device);
@@ -204,12 +206,13 @@ public:
 	}
 
 	void renderPrimitive(vkglTF::Model &model, vkglTF::Primitive &primitive, VkCommandBuffer commandBuffer) {
-		std::array<VkDescriptorSet, 2> descriptorsets = {
+		const std::vector<VkDescriptorSet> descriptorsets = {
 			descriptorSets.object,
 			primitive.material.descriptorSet,
+			primitive.uniformBuffer.descriptorSet,
 		};
 
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 2, descriptorsets.data(), 0, NULL);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
 
 		// Pass material parameters as push constants
 		PushConstBlockMaterial pushConstBlockMaterial{
@@ -333,6 +336,7 @@ public:
 		*/
 		uint32_t imageSamplerCount = 0;
 		uint32_t materialCount = 0;
+		uint32_t primitiveCount = static_cast<uint32_t>(models.object.primitives.size()) + static_cast<uint32_t>(models.skybox.primitives.size());
 		// Environment samplers (radiance, irradiance, brdf lut)
 		imageSamplerCount += 3;
 		// Model materials
@@ -345,14 +349,14 @@ public:
 		}
 
 		std::vector<VkDescriptorPoolSize> poolSizes = {
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4 },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024 }, // TODO
 			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount }
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		descriptorPoolCI.poolSizeCount = 2;
 		descriptorPoolCI.pPoolSizes = poolSizes.data();
-		descriptorPoolCI.maxSets = 2 + materialCount;
+		descriptorPoolCI.maxSets = 2 + materialCount + primitiveCount;
 		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool));
 
 		/*
@@ -465,6 +469,39 @@ public:
 
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
 			}
+
+			// Model node (matrices)
+			{
+				std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+					{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
+				};
+				VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+				descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
+				descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+				VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.node));
+
+				// Per-Primitive descriptor set
+				for (auto &primitive : models.object.primitives) {
+					VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+					descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+					descriptorSetAllocInfo.descriptorPool = descriptorPool;
+					descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.node;
+					descriptorSetAllocInfo.descriptorSetCount = 1;
+					VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &primitive.uniformBuffer.descriptorSet));
+
+					VkWriteDescriptorSet writeDescriptorSet{};
+					writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+					writeDescriptorSet.descriptorCount = 1;
+					writeDescriptorSet.dstSet = primitive.uniformBuffer.descriptorSet;
+					writeDescriptorSet.dstBinding = 0;
+					writeDescriptorSet.pBufferInfo = &primitive.uniformBuffer.descriptor;
+
+					vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+				}
+			}
+
 		}
 
 		// Skybox (fixed set)

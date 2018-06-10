@@ -7,7 +7,7 @@ layout (location = 0) in vec3 inPos;
 layout (location = 1) in vec3 inNormal;
 layout (location = 2) in vec2 inUV;
 
-layout (binding = 0) uniform UBO 
+layout (set = 0, binding = 0) uniform UBO 
 {
 	mat4 projection;
 	mat4 model;
@@ -15,6 +15,10 @@ layout (binding = 0) uniform UBO
 	vec3 camPos;
 	float flipUV;
 } ubo;
+
+layout (set = 2, binding = 0) uniform UBONode {
+	mat4 matrix;
+} node;
 
 layout (location = 0) out vec3 outWorldPos;
 layout (location = 1) out vec3 outNormal;
@@ -27,9 +31,12 @@ out gl_PerVertex
 
 void main() 
 {
-	vec3 locPos = vec3(ubo.model * vec4(inPos, 1.0));
+	vec3 locPos = vec3(ubo.model * node.matrix * vec4(inPos, 1.0));
+	locPos.y = -locPos.y;
+//	vec3 locPos = vec3(ubo.model * vec4(inPos, 1.0));
 	outWorldPos = locPos;
-	outNormal = normalize(inNormal);
+//	outNormal = normalize(inNormal);
+	outNormal = mat3(ubo.model * node.matrix) * normalize(inNormal);
 	outUV = inUV;
 	if (ubo.flipUV == 1.0) {
 		outUV.t = 1.0 - inUV.t;

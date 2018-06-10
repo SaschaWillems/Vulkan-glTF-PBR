@@ -324,6 +324,26 @@ namespace vkglTF
 		uint32_t firstIndex;
 		uint32_t indexCount;
 		Material &material;
+		glm::mat4 matrix = glm::mat4(1.0f);
+		struct UniformBuffer {
+			VkBuffer buffer;
+			VkDeviceMemory memory;
+			VkDescriptorBufferInfo descriptor;
+			VkDescriptorSet descriptorSet;
+			void *mapped;
+		} uniformBuffer;
+		void prepareUniformBuffer(vks::VulkanDevice *device) {
+			VK_CHECK_RESULT(device->createBuffer(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				sizeof(matrix),
+				&uniformBuffer.buffer,
+				&uniformBuffer.memory,
+				&matrix));
+			VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, uniformBuffer.memory, 0, sizeof(matrix), 0, &uniformBuffer.mapped));
+			uniformBuffer.descriptor = { uniformBuffer.buffer, 0, sizeof(matrix) };
+		}
+	};
 	};
 
 	/*
@@ -433,13 +453,9 @@ namespace vkglTF
 
 						for (size_t v = 0; v < posAccessor.count; v++) {
 							Vertex vert{};
-							vert.pos = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
-							vert.pos *= globalscale;
-							vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
+							vert.pos = glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
+							vert.normal = glm::normalize(glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
 							vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
-							// Vulkan coordinate system
-							vert.pos.y *= -1.0f;
-							vert.normal.y *= -1.0f;
 							vertexBuffer.push_back(vert);
 						}
 					}
@@ -481,7 +497,7 @@ namespace vkglTF
 							return;
 						}
 					}
-					primitives.push_back({ indexStart, indexCount, materials[primitive.material] });
+					primitives.push_back({ indexStart, indexCount, materials[primitive.material], nodeIndex, localNodeMatrix });
 				}
 			}
 		}
@@ -639,6 +655,11 @@ namespace vkglTF
 			vkFreeMemory(device->logicalDevice, vertexStaging.memory, nullptr);
 			vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
 			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
+
+			// Prepare per-primitive uniform buffers
+			for (auto& primitive : primitives) {
+				primitive.prepareUniformBuffer(device);
+			}
 		}
 
 		void draw(VkCommandBuffer commandBuffer)
