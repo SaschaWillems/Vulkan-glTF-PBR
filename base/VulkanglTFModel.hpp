@@ -344,12 +344,42 @@ namespace vkglTF
 			uniformBuffer.descriptor = { uniformBuffer.buffer, 0, sizeof(matrix) };
 		}
 	};
+
+	/*
+		glTF node
+	*/
+	struct Node {
+		Node *parent;
+		uint32_t index;
+		std::vector<Node*> children;
+		glm::mat4 matrix;
+		std::string name;
+		Primitive *mesh;
+		// Animation
+		glm::vec3 translation{};
+		glm::vec3 scale{ 1.0f };
+		glm::quat rotation{};
+		glm::mat4 localMatrix() {
+			return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+		}
+		glm::mat4 getMatrix() {
+			glm::mat4 m = localMatrix();
+			vkglTF::Node *p = parent;
+			while (p) {
+				m = p->localMatrix() * m;
+				p = p->parent;
+			}
+			return m;
+		}
+	};
 	};
 
 	/*
 		glTF model loading and rendering class
 	*/
 	struct Model {
+
+		vks::VulkanDevice *device;
 
 		struct Vertex {
 			glm::vec3 pos;
@@ -367,7 +397,7 @@ namespace vkglTF
 			VkDeviceMemory memory;
 		} indices;
 
-		std::vector<Primitive> primitives;
+		std::vector<Node*> nodes;
 
 		std::vector<Texture> textures;
 		std::vector<Material> materials;
@@ -383,35 +413,38 @@ namespace vkglTF
 			}
 		};
 
-		void loadNode(const tinygltf::Node &node, const glm::mat4 &parentMatrix, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
+		void loadNode(vkglTF::Node *parent, const tinygltf::Node &node, uint32_t nodeIndex, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
 		{
+			vkglTF::Node *newNode = new Node{};
+			newNode->index = nodeIndex;
+			newNode->parent = parent;
+			newNode->name = node.name;
+			newNode->matrix = glm::mat4(1.0f);
+
 			// Generate local node matrix
 			glm::vec3 translation = glm::vec3(0.0f);
 			if (node.translation.size() == 3) {
 				translation = glm::make_vec3(node.translation.data());
+				newNode->translation = translation;
 			}
 			glm::mat4 rotation = glm::mat4(1.0f);
 			if (node.rotation.size() == 4) {
 				glm::quat q = glm::make_quat(node.rotation.data());
-				rotation = glm::mat4(q);
+				newNode->rotation = glm::mat4(q);
 			}
 			glm::vec3 scale = glm::vec3(1.0f);
 			if (node.scale.size() == 3) {
 				scale = glm::make_vec3(node.scale.data());
+				newNode->scale = scale;
 			}
-			glm::mat4 localNodeMatrix = glm::mat4(1.0f);
 			if (node.matrix.size() == 16) {
-				localNodeMatrix = glm::make_mat4x4(node.matrix.data());
-			} else {
-				// T * R * S
-				localNodeMatrix = glm::translate(glm::mat4(1.0f), translation) * rotation * glm::scale(glm::mat4(1.0f), scale);
-			}
-			localNodeMatrix = parentMatrix * localNodeMatrix;
+				newNode->matrix = glm::make_mat4x4(node.matrix.data());
+			};
 
-			// Parent node with children
+			// Node with children
 			if (node.children.size() > 0) {
 				for (auto i = 0; i < node.children.size(); i++) {
-					loadNode(model.nodes[node.children[i]], localNodeMatrix, model, indexBuffer, vertexBuffer, globalscale);
+					loadNode(newNode, model.nodes[node.children[i]], node.children[i], model, indexBuffer, vertexBuffer, globalscale);
 				}
 			}
 
@@ -497,8 +530,14 @@ namespace vkglTF
 							return;
 						}
 					}
-					primitives.push_back({ indexStart, indexCount, materials[primitive.material], nodeIndex, localNodeMatrix });
+					newNode->mesh = new Primitive{ indexStart, indexCount, materials[primitive.material], newNode->matrix };
+					newNode->mesh->prepareUniformBuffer(device);
 				}
+			}
+			if (parent) {
+				parent->children.push_back(newNode);
+			} else {
+				nodes.push_back(newNode);
 			}
 		}
 
@@ -561,6 +600,8 @@ namespace vkglTF
 			tinygltf::TinyGLTF gltfContext;
 			std::string error;
 
+			this->device = device;
+
 #if defined(__ANDROID__)
 			AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_STREAMING);
 			assert(asset);
@@ -584,7 +625,7 @@ namespace vkglTF
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
 					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
-					loadNode(node, glm::mat4(1.0f), gltfModel, indexBuffer, vertexBuffer, scale);
+					loadNode(nullptr, node, scene.nodes[i], gltfModel, indexBuffer, vertexBuffer, scale);
 				}
 			}
 			else {
@@ -655,10 +696,8 @@ namespace vkglTF
 			vkFreeMemory(device->logicalDevice, vertexStaging.memory, nullptr);
 			vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
 			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
+		}
 
-			// Prepare per-primitive uniform buffers
-			for (auto& primitive : primitives) {
-				primitive.prepareUniformBuffer(device);
 			}
 		}
 
@@ -667,8 +706,8 @@ namespace vkglTF
 			const VkDeviceSize offsets[1] = { 0 };
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
 			vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-			for (auto primitive : primitives) {
-				vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+			for (auto& node : nodes) {
+				drawNode(node, commandBuffer);
 			}
 		}
 	};
