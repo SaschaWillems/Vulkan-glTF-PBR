@@ -326,7 +326,20 @@ public:
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 		textures.environmentCube.loadFromFile(assetpath + "textures/papermill_hdr16f_cube.ktx", VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
 		models.skybox.loadFromFile(assetpath + "models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
-		models.object.loadFromFile(assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf", vulkanDevice, queue);
+
+		std::string sceneFile = assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf";
+		for (size_t i = 0; i < args.size(); i++) {
+			if (std::string(args[i]).find(".gltf") != std::string::npos) {
+				std::ifstream file(args[i]);
+				if (file.good()) {
+					sceneFile = args[i];
+				} else {
+					std::cout << "could not load \"" << args[i] << "\"" << std::endl;
+				}
+			}
+		}
+
+		models.object.loadFromFile(sceneFile, vulkanDevice, queue);
 	}
 
 	void setupDescriptors()
