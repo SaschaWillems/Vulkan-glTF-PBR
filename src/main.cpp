@@ -676,7 +676,7 @@ public:
 		rasterizationStateCI.cullMode = VK_CULL_MODE_BACK_BIT;
 		shaderStages = {
 			loadShader(device, "pbr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-			loadShader(device, "pbr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
+			loadShader(device, "pbr_khr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 		};
 		depthStencilStateCI.depthWriteEnable = VK_TRUE;
 		depthStencilStateCI.depthTestEnable = VK_TRUE;

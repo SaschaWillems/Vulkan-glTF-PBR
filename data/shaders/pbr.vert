@@ -18,6 +18,7 @@ layout (set = 0, binding = 0) uniform UBO
 
 layout (set = 2, binding = 0) uniform UBONode {
 	mat4 matrix;
+	mat4 normalMatrix;
 } node;
 
 layout (location = 0) out vec3 outWorldPos;
@@ -31,15 +32,15 @@ out gl_PerVertex
 
 void main() 
 {
-	vec3 locPos = vec3(ubo.model * node.matrix * vec4(inPos, 1.0));
+	vec4 locPos = ubo.model * node.matrix * vec4(inPos, 1.0);
 	locPos.y = -locPos.y;
-//	vec3 locPos = vec3(ubo.model * vec4(inPos, 1.0));
-	outWorldPos = locPos;
-//	outNormal = normalize(inNormal);
-	outNormal = mat3(ubo.model * node.matrix) * normalize(inNormal);
+	outWorldPos = locPos.xyz / locPos.w;
+	outNormal = normalize(transpose(inverse(mat3(ubo.model * node.matrix))) * inNormal);
 	outUV = inUV;
 	if (ubo.flipUV == 1.0) {
 		outUV.t = 1.0 - inUV.t;
 	}
 	gl_Position =  ubo.projection * ubo.view * vec4(outWorldPos, 1.0);
+	//outWorldPos.x *= -1.0f;
+	//outWorldPos.z *= -1.0f;
 }
