@@ -1594,12 +1594,22 @@ public:
 
 	void updateUniformBuffers()
 	{
-		// 3D object
+		// Scene
 		uboMatrices.projection = camera.matrices.perspective;
+
 		uboMatrices.view = camera.matrices.view;
-		uboMatrices.model = glm::mat4(1.0f);
-		uboMatrices.model = glm::rotate(uboMatrices.model, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-		uboMatrices.camPos = camera.position * -1.0f;
+
+		uboMatrices.model = glm::rotate(glm::mat4(1.0f), glm::radians(modelrot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+		uboMatrices.model = glm::rotate(uboMatrices.model, glm::radians(modelrot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+		uboMatrices.model = glm::rotate(uboMatrices.model, glm::radians(modelrot.z), glm::vec3(0.0f, 0.0f, 1.0f));
+		uboMatrices.model = glm::scale(uboMatrices.model, glm::vec3(scale));
+
+		uboMatrices.camPos = glm::vec3(
+			-camera.position.z * sin(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x)),
+			-camera.position.z * sin(glm::radians(camera.rotation.x)),
+			camera.position.z * cos(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x))
+		);
+
 		memcpy(uniformBuffers.object.mapped, &uboMatrices, sizeof(uboMatrices));
 
 		// Skybox
