@@ -8,7 +8,6 @@
 * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
 */
 
-// PBR reference: http://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
 // glTF format: https://github.com/KhronosGroup/glTF
 // tinyglTF loader: https://github.com/syoyo/tinygltf
 
@@ -124,7 +123,7 @@ public:
 		glm::mat4 model;
 		glm::mat4 view;
 		glm::vec3 camPos;
-		float flipUV = 1.0f;
+		float flipUV = 0.0f;
 	} uboMatrices;
 
 	struct UBOParams {
@@ -153,13 +152,17 @@ public:
 		VkDescriptorSet skybox;
 	} descriptorSets;
 
-	glm::vec3 rotation = glm::vec3(0.0f, 135.0f, 0.0f);
+	float animationTimer = 0.0f;
+
+	float scale = 1.0f;
 	
 	struct LightSource {
 		glm::vec3 color = glm::vec3(1.0f);
 		glm::vec3 rotation = glm::vec3(75.0f, 40.0f, 0.0f);
 	} lightSource;
 
+	bool rotateModel = false;
+	glm::vec3 modelrot = glm::vec3(0.0f);
 
 	struct PushConstBlockMaterial {
 		glm::vec4 baseColorFactor;
@@ -176,13 +179,17 @@ public:
 
 	VulkanExample() : VulkanExampleBase()
 	{
-		title = "Vulkan glTf 2.0 PBR";
-		camera.type = Camera::CameraType::firstperson;
-		camera.movementSpeed = 2.0f;
-		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
+		title = "Vulkan glTF 2.0 PBR";
+		camera.type = Camera::CameraType::lookat;
+
+		camera.setPerspective(45.0f, (float)width / (float)height, 0.1f, 256.0f);
 		camera.rotationSpeed = 0.25f;
-		camera.setRotation({ -12.0f, 152.0f, 0.0f });
-		camera.setPosition({ 1.05f, 0.31f, 1.85f });
+		camera.movementSpeed = 0.1f;
+
+		camera.setPosition({ 0.0f, 0.0f, 4.25f });
+		camera.setRotation({ 0.0f, 0.0f, 0.0f });
+
+		modelrot.y = -30.0f;
 	}
 
 	~VulkanExample()
@@ -342,11 +349,13 @@ public:
 
 		std::string sceneFile = assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf";
 		std::string envMapFile = assetpath + "textures/papermill_hdr16f_cube.ktx";
+		uboMatrices.flipUV = 1.0f;
 		for (size_t i = 0; i < args.size(); i++) {
 			if (std::string(args[i]).find(".gltf") != std::string::npos) {
 				std::ifstream file(args[i]);
 				if (file.good()) {
 					sceneFile = args[i];
+					uboMatrices.flipUV = 0.0f;
 				} else {
 					std::cout << "could not load \"" << args[i] << "\"" << std::endl;
 				}
@@ -697,6 +706,10 @@ public:
 		pipelineCI.pDynamicState = &dynamicStateCI;
 		pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
 		pipelineCI.pStages = shaderStages.data();
+
+		if (settings.multiSampling) {
+			multisampleStateCI.rasterizationSamples = settings.sampleCount;
+		}
 
 		// Skybox pipeline (background cube)
 		shaderStages = {
@@ -1663,11 +1676,23 @@ public:
 		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentBuffer]));
 		VulkanExampleBase::submitFrame();
 		if (!paused) {
-			rotation.y += frameTimer * 0.1f;
-			if (rotation.y > 2.0f * (float)M_PI) {
-				rotation.y -= 2.0f * (float)M_PI;
+			if (rotateModel) {
+				modelrot.y += frameTimer * 35.0f;
+				if (modelrot.y > 360.0f) {
+					modelrot.y -= 360.0f;
+				}
 			}
-			updateUniformBuffers();
+			if (models.object.animations.size() > 0) {
+				animationTimer += frameTimer * 1.0f;
+				if (animationTimer > models.object.animations[0].end) {
+					animationTimer -= models.object.animations[0].end;
+				}
+				models.object.updateAnimation(0, animationTimer);
+			}
+			updateParams();
+			if (rotateModel) {
+				updateUniformBuffers();
+			}
 		}
 
 	}
