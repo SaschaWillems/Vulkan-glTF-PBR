@@ -318,7 +318,7 @@ namespace vkglTF
 	};
 
 	/*
-		glTF primitive class
+		glTF primitive
 	*/
 	struct Primitive {
 		uint32_t firstIndex;
@@ -590,7 +590,7 @@ namespace vkglTF
 			}
 		}
 
-		void loadMaterials(tinygltf::Model &gltfModel, vks::VulkanDevice *device, VkQueue transferQueue)
+		void loadMaterials(tinygltf::Model &gltfModel)
 		{
 			for (tinygltf::Material &mat : gltfModel.materials) {
 				vkglTF::Material material{};
@@ -773,7 +773,7 @@ namespace vkglTF
 
 			if (fileLoaded) {
 				loadImages(gltfModel, device, transferQueue);
-				loadMaterials(gltfModel, device, transferQueue);
+				loadMaterials(gltfModel);
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
 					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
