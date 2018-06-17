@@ -128,7 +128,7 @@ public:
 	} uboMatrices;
 
 	struct UBOParams {
-		glm::vec4 lightDir = glm::vec4(0.0f, -0.5f, -0.5f, 1.0f);
+		glm::vec4 lightDir;
 		float exposure = 4.5f;
 		float gamma = 2.2f;
 		float prefilteredCubeMipLevels;
@@ -154,6 +154,12 @@ public:
 	} descriptorSets;
 
 	glm::vec3 rotation = glm::vec3(0.0f, 135.0f, 0.0f);
+	
+	struct LightSource {
+		glm::vec3 color = glm::vec3(1.0f);
+		glm::vec3 rotation = glm::vec3(75.0f, 40.0f, 0.0f);
+	} lightSource;
+
 
 	struct PushConstBlockMaterial {
 		glm::vec4 baseColorFactor;
@@ -1574,7 +1580,11 @@ public:
 
 	void updateParams()
 	{
-		uboParams.lightDir = glm::vec4(0.0f, -0.5f, -0.5f, 1.0f);
+		uboParams.lightDir = glm::vec4(
+			sin(glm::radians(lightSource.rotation.x)) * cos(glm::radians(lightSource.rotation.y)),
+			sin(glm::radians(lightSource.rotation.y)),
+			cos(glm::radians(lightSource.rotation.x)) * cos(glm::radians(lightSource.rotation.y)),
+			0.0f);
 		memcpy(uniformBuffers.params.mapped, &uboParams, sizeof(uboParams));
 	}
 
