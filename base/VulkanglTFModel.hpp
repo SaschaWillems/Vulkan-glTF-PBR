@@ -371,6 +371,15 @@ namespace vkglTF
 			}
 			return m;
 		}
+		void update() {
+			if (mesh) {
+				glm::mat4 m = getMatrix();
+				memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
+			}
+			for (auto& child : children) {
+				child->update();
+			}
+		}
 	};
 
 	/*
@@ -861,6 +870,63 @@ namespace vkglTF
 			vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 			for (auto& node : nodes) {
 				drawNode(node, commandBuffer);
+			}
+		}
+
+		void updateAnimation(uint32_t index, float time) 
+		{
+			if (index > static_cast<uint32_t>(animations.size()) - 1) {
+				std::cout << "No animation with index " << index << std::endl;
+				exit;
+			}
+			Animation &animation = animations[index];
+
+			bool updated = false;
+			for (auto& channel : animation.channels) {
+				vkglTF::AnimationSampler &sampler = animation.samplers[channel.samplerIndex];
+				if (sampler.inputs.size() > sampler.outputsVec4.size()) {
+					continue;
+				}
+
+				for (auto i = 0; i < sampler.inputs.size() - 1; i++) {
+					if ((time >= sampler.inputs[i]) && (time <= sampler.inputs[i + 1])) {
+						float u = std::max(0.0f, time - sampler.inputs[i]) / (sampler.inputs[i + 1] - sampler.inputs[i]);
+						if (u <= 1.0f) {
+							switch (channel.path) {
+							case vkglTF::AnimationChannel::PathType::TRANSLATION: {
+								glm::vec4 trans = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], u);
+								channel.node->translation = glm::vec3(trans);
+								break;
+							}
+							case vkglTF::AnimationChannel::PathType::SCALE: {
+								glm::vec4 trans = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], u);
+								channel.node->scale = glm::vec3(trans);
+								break;
+							}
+							case vkglTF::AnimationChannel::PathType::ROTATION: {
+								glm::quat q1;
+								q1.x = sampler.outputsVec4[i].x;
+								q1.y = sampler.outputsVec4[i].y;
+								q1.z = sampler.outputsVec4[i].z;
+								q1.w = sampler.outputsVec4[i].w;
+								glm::quat q2;
+								q2.x = sampler.outputsVec4[i + 1].x;
+								q2.y = sampler.outputsVec4[i + 1].y;
+								q2.z = sampler.outputsVec4[i + 1].z;
+								q2.w = sampler.outputsVec4[i + 1].w;
+								channel.node->rotation = glm::slerp(q1, q2, u);
+								break;
+							}
+							}
+							updated = true;
+						}
+					}
+				}
+			}
+			if (updated) {
+				for (auto &node : nodes) {
+					node->update();
+				}
 			}
 		}
 
