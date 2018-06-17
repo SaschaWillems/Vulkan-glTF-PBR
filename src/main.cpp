@@ -211,31 +211,41 @@ public:
 		textures.lutBrdf.destroy();
 	}
 
-	void renderPrimitive(vkglTF::Model &model, vkglTF::Primitive &primitive, VkCommandBuffer commandBuffer) {
-		const std::vector<VkDescriptorSet> descriptorsets = {
-			descriptorSets.object,
-			primitive.material.descriptorSet,
-			primitive.uniformBuffer.descriptorSet,
+	void renderNode(vkglTF::Node *node, VkCommandBuffer commandBuffer, vkglTF::Material::AlphaMode alphaMode) {
+		if ((node->mesh) && (node->mesh->material.alphaMode == alphaMode)) {
+			glm::mat4 m = node->getMatrix();
+			memcpy(node->mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
+
+			// Render mesh for this node
+			const std::vector<VkDescriptorSet> descriptorsets = {
+				descriptorSets.object,
+				node->mesh->material.descriptorSet,
+				node->mesh->uniformBuffer.descriptorSet,
+			};
+
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
+
+			// Pass material parameters as push constants
+			PushConstBlockMaterial pushConstBlockMaterial{
+				node->mesh->material.baseColorFactor,
+				static_cast<float>(node->mesh->material.baseColorTexture != nullptr),
+				static_cast<float>(node->mesh->material.metallicRoughnessTexture != nullptr),
+				static_cast<float>(node->mesh->material.normalTexture != nullptr),
+				static_cast<float>(node->mesh->material.occlusionTexture != nullptr),
+				static_cast<float>(node->mesh->material.emissiveTexture != nullptr),
+				node->mesh->material.metallicFactor,
+				node->mesh->material.roughnessFactor,
+				static_cast<float>(node->mesh->material.alphaMode == vkglTF::Material::ALPHAMODE_MASK),
+				node->mesh->material.alphaCutoff
+			};
+			vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
+
+			vkCmdDrawIndexed(commandBuffer, node->mesh->indexCount, 1, node->mesh->firstIndex, 0, 0);
+
 		};
-
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
-
-		// Pass material parameters as push constants
-		PushConstBlockMaterial pushConstBlockMaterial{
-			primitive.material.baseColorFactor,
-			static_cast<float>(primitive.material.baseColorTexture != nullptr),
-			static_cast<float>(primitive.material.metallicRoughnessTexture != nullptr),
-			static_cast<float>(primitive.material.normalTexture != nullptr),
-			static_cast<float>(primitive.material.occlusionTexture != nullptr),
-			static_cast<float>(primitive.material.emissiveTexture != nullptr),
-			primitive.material.metallicFactor,
-			primitive.material.roughnessFactor,
-			static_cast<float>(primitive.material.alphaMode == vkglTF::Material::ALPHAMODE_MASK),
-			primitive.material.alphaCutoff
-		};
-		vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
-
-		vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+		for (auto child : node->children) {
+			renderNode(child, commandBuffer, alphaMode);
+		}
 	}
 
 	void buildCommandBuffers()
@@ -292,20 +302,18 @@ public:
 			vkCmdBindIndexBuffer(drawCmdBuffers[i], model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 			// Opaque primitives first
-			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
-			for (auto primitive : model.primitives) {
-				if (primitive.material.alphaMode != vkglTF::Material::ALPHAMODE_BLEND) {
-					renderPrimitive(model, primitive, drawCmdBuffers[i]);
-				}
+			for (auto node : model.nodes) {
+				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_OPAQUE);
 			}
 
 			// Transparent last
 			// TODO: Correct depth sorting
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrAlphaBlend);
-			for (auto primitive : model.primitives) {
-				if (primitive.material.alphaMode == vkglTF::Material::ALPHAMODE_BLEND) {
-					renderPrimitive(model, primitive, drawCmdBuffers[i]);
-				}
+			for (auto node : model.nodes) {
+				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_BLEND);
+			}
+			for (auto node : model.nodes) {
+				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_MASK);
 			}
 
 			vkCmdEndRenderPass(drawCmdBuffers[i]);
@@ -548,24 +556,9 @@ public:
 				descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
 				VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.node));
 
-				// Per-Primitive descriptor set
-				for (auto &primitive : models.object.primitives) {
-					VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
-					descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-					descriptorSetAllocInfo.descriptorPool = descriptorPool;
-					descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.node;
-					descriptorSetAllocInfo.descriptorSetCount = 1;
-					VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &primitive.uniformBuffer.descriptorSet));
-
-					VkWriteDescriptorSet writeDescriptorSet{};
-					writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-					writeDescriptorSet.descriptorCount = 1;
-					writeDescriptorSet.dstSet = primitive.uniformBuffer.descriptorSet;
-					writeDescriptorSet.dstBinding = 0;
-					writeDescriptorSet.pBufferInfo = &primitive.uniformBuffer.descriptor;
-
-					vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+				// Per-Node descriptor set
+				for (auto &node : models.object.nodes) {
+					setupNodeDescriptorSet(node);
 				}
 			}
 
@@ -623,7 +616,7 @@ public:
 		VkPipelineColorBlendAttachmentState blendAttachmentState{};
 		blendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 		blendAttachmentState.blendEnable = VK_FALSE;
-		
+
 		VkPipelineColorBlendStateCreateInfo colorBlendStateCI{};
 		colorBlendStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 		colorBlendStateCI.attachmentCount = 1;
@@ -659,12 +652,12 @@ public:
 		dynamicStateCI.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
 
 		// Pipeline layout
-		std::array<VkDescriptorSetLayout, 2> setLayouts = { 
-			descriptorSetLayouts.scene, descriptorSetLayouts.material 
+		const std::vector<VkDescriptorSetLayout> setLayouts = {
+			descriptorSetLayouts.scene, descriptorSetLayouts.material, descriptorSetLayouts.node
 		};
 		VkPipelineLayoutCreateInfo pipelineLayoutCI{};
 		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutCI.setLayoutCount = 2;
+		pipelineLayoutCI.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
 		pipelineLayoutCI.pSetLayouts = setLayouts.data();
 		VkPushConstantRange pushConstantRange{};
 		pushConstantRange.size = sizeof(PushConstBlockMaterial);
@@ -706,7 +699,6 @@ public:
 		pipelineCI.pStages = shaderStages.data();
 
 		// Skybox pipeline (background cube)
-		rasterizationStateCI.cullMode = VK_CULL_MODE_FRONT_BIT;
 		shaderStages = {
 			loadShader(device, "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
 			loadShader(device, "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
@@ -717,7 +709,6 @@ public:
 		}
 
 		// PBR pipeline
-		rasterizationStateCI.cullMode = VK_CULL_MODE_BACK_BIT;
 		shaderStages = {
 			loadShader(device, "pbr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
 			loadShader(device, "pbr_khr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
