@@ -358,6 +358,40 @@ public:
 		models.object.loadFromFile(sceneFile, vulkanDevice, queue);
 	}
 
+	void setupNodeDescriptorSet(vkglTF::Node *node) {
+		if (node->mesh) {
+			VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+			descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			descriptorSetAllocInfo.descriptorPool = descriptorPool;
+			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.node;
+			descriptorSetAllocInfo.descriptorSetCount = 1;
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &node->mesh->uniformBuffer.descriptorSet));
+
+			VkWriteDescriptorSet writeDescriptorSet{};
+			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			writeDescriptorSet.descriptorCount = 1;
+			writeDescriptorSet.dstSet = node->mesh->uniformBuffer.descriptorSet;
+			writeDescriptorSet.dstBinding = 0;
+			writeDescriptorSet.pBufferInfo = &node->mesh->uniformBuffer.descriptor;
+
+			vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+		}
+		for (auto& child : node->children) {
+			setupNodeDescriptorSet(child);
+		}
+	}
+
+	void getPrimitiveCount(vkglTF::Node *node, uint32_t &count)
+	{
+		if (node->mesh) {
+			count++;
+		}
+		for (auto child : node->children) {
+			getPrimitiveCount(child, count);
+		}
+	}
+
 	void setupDescriptors()
 	{
 		/*
@@ -365,15 +399,19 @@ public:
 		*/
 		uint32_t imageSamplerCount = 0;
 		uint32_t materialCount = 0;
-		uint32_t primitiveCount = static_cast<uint32_t>(models.object.primitives.size()) + static_cast<uint32_t>(models.skybox.primitives.size());
+		uint32_t primitiveCount = 0;
+
 		// Environment samplers (radiance, irradiance, brdf lut)
 		imageSamplerCount += 3;
-		// Model materials
+
 		std::vector<vkglTF::Model*> modellist = { &models.skybox, &models.object };
 		for (auto &model : modellist) {
 			for (auto &material : model->materials) {
 				imageSamplerCount += 5;
 				materialCount++;
+			}
+			for (auto node : model->nodes) {
+				getPrimitiveCount(node, primitiveCount);
 			}
 		}
 
