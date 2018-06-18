@@ -325,6 +325,7 @@ namespace vkglTF
 		uint32_t indexCount;
 		Material &material;
 		glm::mat4 matrix = glm::mat4(1.0f);
+		vks::VulkanDevice *device;
 		struct UniformBuffer {
 			VkBuffer buffer;
 			VkDeviceMemory memory;
@@ -332,7 +333,8 @@ namespace vkglTF
 			VkDescriptorSet descriptorSet;
 			void *mapped;
 		} uniformBuffer;
-		void prepareUniformBuffer(vks::VulkanDevice *device) {
+
+		Primitive(vks::VulkanDevice *device, uint32_t firstIndex, uint32_t indexCount, Material &material, glm::mat4 matrix) : device(device), firstIndex(firstIndex), indexCount(indexCount), material(material), matrix(matrix) {
 			VK_CHECK_RESULT(device->createBuffer(
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -342,6 +344,11 @@ namespace vkglTF
 				&matrix));
 			VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, uniformBuffer.memory, 0, sizeof(matrix), 0, &uniformBuffer.mapped));
 			uniformBuffer.descriptor = { uniformBuffer.buffer, 0, sizeof(matrix) };
+		};
+
+		~Primitive() {
+			vkDestroyBuffer(device->logicalDevice, uniformBuffer.buffer, nullptr);
+			vkFreeMemory(device->logicalDevice, uniformBuffer.memory, nullptr);
 		}
 	};
 
@@ -355,13 +362,14 @@ namespace vkglTF
 		glm::mat4 matrix;
 		std::string name;
 		Primitive *mesh;
-		// Animation
 		glm::vec3 translation{};
 		glm::vec3 scale{ 1.0f };
 		glm::quat rotation{};
+
 		glm::mat4 localMatrix() {
 			return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
 		}
+
 		glm::mat4 getMatrix() {
 			glm::mat4 m = localMatrix();
 			vkglTF::Node *p = parent;
@@ -371,6 +379,7 @@ namespace vkglTF
 			}
 			return m;
 		}
+
 		void update() {
 			if (mesh) {
 				glm::mat4 m = getMatrix();
@@ -378,6 +387,15 @@ namespace vkglTF
 			}
 			for (auto& child : children) {
 				child->update();
+			}
+		}
+
+		~Node() {
+			if (mesh) {
+				delete mesh;
+			}
+			for (auto& child : children) {
+				delete child;
 			}
 		}
 	};
@@ -450,6 +468,9 @@ namespace vkglTF
 			vkFreeMemory(device, indices.memory, nullptr);
 			for (auto texture : textures) {
 				texture.destroy();
+			}
+			for (auto node : nodes) {
+				delete node;
 			}
 		};
 
@@ -570,8 +591,7 @@ namespace vkglTF
 							return;
 						}
 					}
-					newNode->mesh = new Primitive{ indexStart, indexCount, materials[primitive.material], newNode->matrix };
-					newNode->mesh->prepareUniformBuffer(device);
+					newNode->mesh = new Primitive(device, indexStart, indexCount, materials[primitive.material], newNode->matrix);
 				}
 			}
 			if (parent) {

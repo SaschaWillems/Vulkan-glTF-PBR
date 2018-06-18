@@ -196,6 +196,7 @@ public:
 	{
 		vkDestroyPipeline(device, pipelines.skybox, nullptr);
 		vkDestroyPipeline(device, pipelines.pbr, nullptr);
+		vkDestroyPipeline(device, pipelines.pbrAlphaBlend, nullptr);
 
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.scene, nullptr);
@@ -216,6 +217,7 @@ public:
 		textures.irradianceCube.destroy();
 		textures.prefilteredCube.destroy();
 		textures.lutBrdf.destroy();
+		textures.empty.destroy();
 	}
 
 	void renderNode(vkglTF::Node *node, VkCommandBuffer commandBuffer, vkglTF::Material::AlphaMode alphaMode) {
