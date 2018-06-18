@@ -914,7 +914,7 @@ namespace vkglTF
 								q2.y = sampler.outputsVec4[i + 1].y;
 								q2.z = sampler.outputsVec4[i + 1].z;
 								q2.w = sampler.outputsVec4[i + 1].w;
-								channel.node->rotation = glm::slerp(q1, q2, u);
+								channel.node->rotation = glm::normalize(glm::slerp(q1, q2, u));
 								break;
 							}
 							}
