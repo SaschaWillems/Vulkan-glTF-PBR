@@ -324,8 +324,34 @@ namespace vkglTF
 		uint32_t firstIndex;
 		uint32_t indexCount;
 		Material &material;
-		glm::mat4 matrix = glm::mat4(1.0f);
+
+		struct Dimensions {
+			glm::vec3 min = glm::vec3(FLT_MAX);
+			glm::vec3 max = glm::vec3(-FLT_MAX);
+			glm::vec3 size;
+			glm::vec3 center;
+			float radius;
+		} dimensions;
+
+		void setDimensions(glm::vec3 min, glm::vec3 max) {
+			dimensions.min = min;
+			dimensions.max = max;
+			dimensions.size = max - min;
+			dimensions.center = (min + max) / 2.0f;
+			dimensions.radius = glm::distance(min, max) / 2.0f;
+		}
+
+		Primitive(uint32_t firstIndex, uint32_t indexCount, Material &material) : firstIndex(firstIndex), indexCount(indexCount), material(material) {};
+	};
+
+	/*
+		glTF mesh
+	*/
+	struct Mesh {
 		vks::VulkanDevice *device;
+
+		std::vector<Primitive*> primitives;
+
 		struct UniformBuffer {
 			VkBuffer buffer;
 			VkDeviceMemory memory;
@@ -334,22 +360,31 @@ namespace vkglTF
 			void *mapped;
 		} uniformBuffer;
 
-		Primitive(vks::VulkanDevice *device, uint32_t firstIndex, uint32_t indexCount, Material &material, glm::mat4 matrix) : device(device), firstIndex(firstIndex), indexCount(indexCount), material(material), matrix(matrix) {
+		struct UniformBlock {
+			glm::mat4 matrix;
+			glm::mat4 jointMatrix[64]{};
+			float jointcount{ 0 };
+		} uniformBlock;
+
+		Mesh(vks::VulkanDevice *device, glm::mat4 matrix) {
+			this->device = device;
+			this->uniformBlock.matrix = matrix;
 			VK_CHECK_RESULT(device->createBuffer(
 				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				sizeof(matrix),
+				sizeof(uniformBlock),
 				&uniformBuffer.buffer,
 				&uniformBuffer.memory,
-				&matrix));
-			VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, uniformBuffer.memory, 0, sizeof(matrix), 0, &uniformBuffer.mapped));
-			uniformBuffer.descriptor = { uniformBuffer.buffer, 0, sizeof(matrix) };
+				&uniformBlock));
+			VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, uniformBuffer.memory, 0, sizeof(uniformBlock), 0, &uniformBuffer.mapped));
+			uniformBuffer.descriptor = { uniformBuffer.buffer, 0, sizeof(uniformBlock) };
 		};
 
-		~Primitive() {
+		~Mesh() {
 			vkDestroyBuffer(device->logicalDevice, uniformBuffer.buffer, nullptr);
 			vkFreeMemory(device->logicalDevice, uniformBuffer.memory, nullptr);
 		}
+
 	};
 
 	/*
@@ -361,7 +396,7 @@ namespace vkglTF
 		std::vector<Node*> children;
 		glm::mat4 matrix;
 		std::string name;
-		Primitive *mesh;
+		Mesh *mesh;
 		glm::vec3 translation{};
 		glm::vec3 scale{ 1.0f };
 		glm::quat rotation{};
@@ -455,6 +490,7 @@ namespace vkglTF
 		} indices;
 
 		std::vector<Node*> nodes;
+		std::vector<Node*> linearNodes;
 
 		std::vector<Texture> textures;
 		std::vector<Material> materials;
@@ -512,6 +548,7 @@ namespace vkglTF
 			// Node contains mesh data
 			if (node.mesh > -1) {
 				const tinygltf::Mesh mesh = model.meshes[node.mesh];
+				Mesh *newMesh = new Mesh(device, newNode->matrix);
 				for (size_t j = 0; j < mesh.primitives.size(); j++) {
 					const tinygltf::Primitive &primitive = mesh.primitives[j];
 					if (primitive.indices < 0) {
@@ -520,6 +557,8 @@ namespace vkglTF
 					uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
 					uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
 					uint32_t indexCount = 0;
+					glm::vec3 posMin{};
+					glm::vec3 posMax{};
 					// Vertices
 					{
 						const float *bufferPos = nullptr;
@@ -532,6 +571,8 @@ namespace vkglTF
 						const tinygltf::Accessor &posAccessor = model.accessors[primitive.attributes.find("POSITION")->second];
 						const tinygltf::BufferView &posView = model.bufferViews[posAccessor.bufferView];
 						bufferPos = reinterpret_cast<const float *>(&(model.buffers[posView.buffer].data[posAccessor.byteOffset + posView.byteOffset]));
+						posMin = glm::vec3(posAccessor.minValues[0], posAccessor.minValues[1], posAccessor.minValues[2]);
+						posMax = glm::vec3(posAccessor.maxValues[0], posAccessor.maxValues[1], posAccessor.maxValues[2]);
 
 						if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
 							const tinygltf::Accessor &normAccessor = model.accessors[primitive.attributes.find("NORMAL")->second];
@@ -591,14 +632,18 @@ namespace vkglTF
 							return;
 						}
 					}
-					newNode->mesh = new Primitive(device, indexStart, indexCount, materials[primitive.material], newNode->matrix);
+					Primitive *newPrimitive = new Primitive(indexStart, indexCount, materials[primitive.material]);
+					newPrimitive->setDimensions(posMin, posMax);
+					newMesh->primitives.push_back(newPrimitive);
 				}
+				newNode->mesh = newMesh;
 			}
 			if (parent) {
 				parent->children.push_back(newNode);
 			} else {
 				nodes.push_back(newNode);
 			}
+			linearNodes.push_back(newNode);
 		}
 
 		void loadImages(tinygltf::Model &gltfModel, vks::VulkanDevice *device, VkQueue transferQueue)
@@ -876,7 +921,9 @@ namespace vkglTF
 		void drawNode(Node *node, VkCommandBuffer commandBuffer)
 		{
 			if (node->mesh) {
-				vkCmdDrawIndexed(commandBuffer, node->mesh->indexCount, 1, node->mesh->firstIndex, 0, 0);
+				for (Primitive *primitive : node->mesh->primitives) {
+					vkCmdDrawIndexed(commandBuffer, primitive->indexCount, 1, primitive->firstIndex, 0, 0);
+				}
 			}
 			for (auto& child : node->children) {
 				drawNode(child, commandBuffer);
