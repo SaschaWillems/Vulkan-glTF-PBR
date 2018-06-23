@@ -496,6 +496,14 @@ namespace vkglTF
 		std::vector<Material> materials;
 		std::vector<Animation> animations;
 
+		struct Dimensions {
+			glm::vec3 min = glm::vec3(FLT_MAX);
+			glm::vec3 max = glm::vec3(-FLT_MAX);
+			glm::vec3 size;
+			glm::vec3 center;
+			float radius;
+		} dimensions;
+
 		void destroy(VkDevice device)
 		{
 			vkDestroyBuffer(device, vertices.buffer, nullptr);
@@ -916,6 +924,8 @@ namespace vkglTF
 			vkFreeMemory(device->logicalDevice, vertexStaging.memory, nullptr);
 			vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
 			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
+
+			getSceneDimensions();
 		}
 
 		void drawNode(Node *node, VkCommandBuffer commandBuffer)
@@ -938,6 +948,37 @@ namespace vkglTF
 			for (auto& node : nodes) {
 				drawNode(node, commandBuffer);
 			}
+		}
+
+		void getNodeDimensions(Node *node, glm::vec3 &min, glm::vec3 &max)
+		{
+			if (node->mesh) {
+				for (Primitive *primitive : node->mesh->primitives) {
+					glm::vec4 locMin = glm::vec4(primitive->dimensions.min, 1.0f) * node->getMatrix();
+					glm::vec4 locMax = glm::vec4(primitive->dimensions.max, 1.0f) * node->getMatrix();
+					if (locMin.x < min.x) { min.x = locMin.x; }
+					if (locMin.y < min.y) { min.y = locMin.y; }
+					if (locMin.z < min.z) { min.z = locMin.z; }
+					if (locMax.x > max.x) { max.x = locMax.x; }
+					if (locMax.y > max.y) { max.y = locMax.y; }
+					if (locMax.z > max.z) { max.z = locMax.z; }
+				}
+			}
+			for (auto child : node->children) {
+				getNodeDimensions(child, min, max);
+			}
+		}
+
+		void getSceneDimensions()
+		{
+			dimensions.min = glm::vec3(FLT_MAX);
+			dimensions.max = glm::vec3(-FLT_MAX);
+			for (auto node : nodes) {
+				getNodeDimensions(node, dimensions.min, dimensions.max);
+			}
+			dimensions.size = dimensions.max - dimensions.min;
+			dimensions.center = (dimensions.min + dimensions.max) / 2.0f;
+			dimensions.radius = glm::distance(dimensions.min, dimensions.max) / 2.0f;
 		}
 
 		void updateAnimation(uint32_t index, float time) 
