@@ -31,6 +31,8 @@
 
 namespace vkglTF
 {
+	class Node;
+
 	/*
 		glTF texture loading class
 	*/
@@ -388,6 +390,16 @@ namespace vkglTF
 	};
 
 	/*
+	glTF skin
+	*/
+	struct Skin {
+		std::string name;
+		Node *skeletonRoot = nullptr;
+		std::vector<glm::mat4> inverseBindMatrices;
+		std::vector<Node*> joints;
+	};
+
+	/*
 		glTF node
 	*/
 	struct Node {
@@ -397,6 +409,7 @@ namespace vkglTF
 		glm::mat4 matrix;
 		std::string name;
 		Mesh *mesh;
+		Skin *skin;
 		int32_t skinIndex = -1;
 		glm::vec3 translation{};
 		glm::vec3 scale{ 1.0f };
@@ -419,8 +432,23 @@ namespace vkglTF
 		void update() {
 			if (mesh) {
 				glm::mat4 m = getMatrix();
-				memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
+				if (skin) {
+					mesh->uniformBlock.matrix = m;
+					// Update join matrices
+					glm::mat4 inverseTransform = glm::inverse(m);
+					for (size_t i = 0; i < skin->joints.size(); i++) {
+						vkglTF::Node *jointNode = skin->joints[i];
+						glm::mat4 jointMat = jointNode->getMatrix() * skin->inverseBindMatrices[i];
+						jointMat = inverseTransform * jointMat;
+						mesh->uniformBlock.jointMatrix[i] = jointMat;
+					}
+					mesh->uniformBlock.jointcount = (float)skin->joints.size();
+					memcpy(mesh->uniformBuffer.mapped, &mesh->uniformBlock, sizeof(mesh->uniformBlock));
+				} else {
+					memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
+				}
 			}
+
 			for (auto& child : children) {
 				child->update();
 			}
@@ -433,41 +461,6 @@ namespace vkglTF
 			for (auto& child : children) {
 				delete child;
 			}
-		}
-	};
-
-	/*
-		glTF skin
-	*/
-	struct Skin {
-		Node *parent;
-		std::string name;
-		Node *skeletonRoot = nullptr;
-		std::vector<glm::mat4> inverseBindMatrices;
-		std::vector<Node*> joints;
-
-		void update() {
-			// Some models do have skins not assigned to any node, so skip
-			if (!parent) {
-				return;
-			}
-			if (!parent->mesh) {
-				return;
-			}
-			glm::mat4 m = parent->getMatrix();
-			parent->mesh->uniformBlock.matrix = m;
-
-			// Update join matrices
-			glm::mat4 inverseTransform = glm::inverse(m);
-			for (size_t i = 0; i < joints.size(); i++) {
-				vkglTF::Node *jointNode = joints[i];
-				glm::mat4 jointMat = jointNode->getMatrix() * inverseBindMatrices[i];
-				jointMat = inverseTransform * jointMat;
-				parent->mesh->uniformBlock.jointMatrix[i] = jointMat;
-			}
-			parent->mesh->uniformBlock.jointcount = (float)joints.size();
-
-			memcpy(parent->mesh->uniformBuffer.mapped, &parent->mesh->uniformBlock, sizeof(parent->mesh->uniformBlock));
 		}
 	};
 
@@ -952,12 +945,13 @@ namespace vkglTF
 				loadSkins(gltfModel);
 
 				for (auto node : linearNodes) {
+					// Assign skins
+					if (node->skinIndex > -1) {
+						node->skin = skins[node->skinIndex];
+					}
 					// Initial pose
 					if (node->mesh) {
 						node->update();
-					}
-					if (node->skinIndex > -1) {
-						skins[node->skinIndex]->parent = node;
 					}
 				}
 			}
@@ -1139,9 +1133,6 @@ namespace vkglTF
 			if (updated) {
 				for (auto &node : nodes) {
 					node->update();
-				}
-				for (auto &skin : skins) {
-					skin->update();
 				}
 			}
 		}
