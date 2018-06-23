@@ -220,39 +220,35 @@ public:
 	}
 
 	void renderNode(vkglTF::Node *node, VkCommandBuffer commandBuffer, vkglTF::Material::AlphaMode alphaMode) {
-		if ((node->mesh) && (node->mesh->material.alphaMode == alphaMode)) {
-			glm::mat4 m = node->getMatrix();
-			memcpy(node->mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
-
-
+		if (node->mesh) {
 			// Render mesh primitives
 			for (vkglTF::Primitive * primitive : node->mesh->primitives) {
+				if (primitive->material.alphaMode == alphaMode) {
 
-				// Render mesh for this node
-				const std::vector<VkDescriptorSet> descriptorsets = {
-					descriptorSets.object,
-					primitive->material.descriptorSet,
-					node->mesh->uniformBuffer.descriptorSet,
-				};
+					const std::vector<VkDescriptorSet> descriptorsets = {
+						descriptorSets.object,
+						primitive->material.descriptorSet,
+						node->mesh->uniformBuffer.descriptorSet,
+					};
+					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
 
-				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
+					// Pass material parameters as push constants
+					PushConstBlockMaterial pushConstBlockMaterial{
+						primitive->material.baseColorFactor,
+						static_cast<float>(primitive->material.baseColorTexture != nullptr),
+						static_cast<float>(primitive->material.metallicRoughnessTexture != nullptr),
+						static_cast<float>(primitive->material.normalTexture != nullptr),
+						static_cast<float>(primitive->material.occlusionTexture != nullptr),
+						static_cast<float>(primitive->material.emissiveTexture != nullptr),
+						primitive->material.metallicFactor,
+						primitive->material.roughnessFactor,
+						static_cast<float>(primitive->material.alphaMode == vkglTF::Material::ALPHAMODE_MASK),
+						primitive->material.alphaCutoff
+					};
+					vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
 
-				// Pass material parameters as push constants
-				PushConstBlockMaterial pushConstBlockMaterial{
-					primitive->material.baseColorFactor,
-					static_cast<float>(primitive->material.baseColorTexture != nullptr),
-					static_cast<float>(primitive->material.metallicRoughnessTexture != nullptr),
-					static_cast<float>(primitive->material.normalTexture != nullptr),
-					static_cast<float>(primitive->material.occlusionTexture != nullptr),
-					static_cast<float>(primitive->material.emissiveTexture != nullptr),
-					primitive->material.metallicFactor,
-					primitive->material.roughnessFactor,
-					static_cast<float>(primitive->material.alphaMode == vkglTF::Material::ALPHAMODE_MASK),
-					primitive->material.alphaCutoff
-				};
-				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
-
-				vkCmdDrawIndexed(commandBuffer, primitive->indexCount, 1, primitive->firstIndex, 0, 0);
+					vkCmdDrawIndexed(commandBuffer, primitive->indexCount, 1, primitive->firstIndex, 0, 0);
+				}
 			}
 
 		};
@@ -310,7 +306,10 @@ public:
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
 			models.skybox.draw(drawCmdBuffers[i]);
 
+			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
+
 			vkglTF::Model &model = models.object;
+
 			vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &model.vertices.buffer, offsets);
 			vkCmdBindIndexBuffer(drawCmdBuffers[i], model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -318,7 +317,6 @@ public:
 			for (auto node : model.nodes) {
 				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_OPAQUE);
 			}
-
 			// Transparent last
 			// TODO: Correct depth sorting
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrAlphaBlend);
