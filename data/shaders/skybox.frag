@@ -25,14 +25,12 @@ vec3 Uncharted2Tonemap(vec3 color)
 	return ((color*(A*color+C*B)+D*E)/(color*(A*color+B)+D*F))-E/F;
 }
 
-/*
 vec4 tonemap(vec4 color)
 {
-	vec3 output = Uncharted2Tonemap(color.rgb * uboParams.exposure);
-	output = output * (1.0f / Uncharted2Tonemap(vec3(11.2f)));	
-	output = vec4(pow(output, vec3(1.0f / uboParams.gamma)), color.a);
+	vec3 outcol = Uncharted2Tonemap(color.rgb * uboParams.exposure);
+	outcol = outcol * (1.0f / Uncharted2Tonemap(vec3(11.2f)));	
+	return vec4(pow(outcol, vec3(1.0f / uboParams.gamma)), color.a);
 }
-*/
 
 #define MANUAL_SRGB 1
 
@@ -51,16 +49,8 @@ vec4 SRGBtoLINEAR(vec4 srgbIn)
 	#endif //MANUAL_SRGB
 }
 
-vec4 tonemap(vec4 color)
-{
-	const float gamma = 2.2;
-	vec4 mapped = color / (color + vec4(1.0));
-	return pow(mapped, vec4(1.0 / gamma));
-}
-
 void main() 
 {
-	vec3 color = SRGBtoLINEAR(tonemap(textureLod(samplerEnv, inUVW, 1.5))).rgb;
-	
+	vec3 color = SRGBtoLINEAR(tonemap(textureLod(samplerEnv, inUVW, 1.5))).rgb;	
 	outColor = vec4(color * 1.0, 1.0);
 }
