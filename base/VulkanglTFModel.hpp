@@ -855,6 +855,12 @@ namespace vkglTF
 				if (gltfModel.animations.size() > 0) {
 					loadAnimations(gltfModel);
 				}
+				for (auto node : linearNodes) {
+					// Initial pose
+					if (node->mesh) {
+						node->update();
+					}
+				}
 			}
 			else {
 				// TODO: throw
