@@ -397,6 +397,7 @@ namespace vkglTF
 		glm::mat4 matrix;
 		std::string name;
 		Mesh *mesh;
+		int32_t skinIndex = -1;
 		glm::vec3 translation{};
 		glm::vec3 scale{ 1.0f };
 		glm::quat rotation{};
@@ -432,6 +433,41 @@ namespace vkglTF
 			for (auto& child : children) {
 				delete child;
 			}
+		}
+	};
+
+	/*
+		glTF skin
+	*/
+	struct Skin {
+		Node *parent;
+		std::string name;
+		Node *skeletonRoot = nullptr;
+		std::vector<glm::mat4> inverseBindMatrices;
+		std::vector<Node*> joints;
+
+		void update() {
+			// Some models do have skins not assigned to any node, so skip
+			if (!parent) {
+				return;
+			}
+			if (!parent->mesh) {
+				return;
+			}
+			glm::mat4 m = parent->getMatrix();
+			parent->mesh->uniformBlock.matrix = m;
+
+			// Update join matrices
+			glm::mat4 inverseTransform = glm::inverse(m);
+			for (size_t i = 0; i < joints.size(); i++) {
+				vkglTF::Node *jointNode = joints[i];
+				glm::mat4 jointMat = jointNode->getMatrix() * inverseBindMatrices[i];
+				jointMat = inverseTransform * jointMat;
+				parent->mesh->uniformBlock.jointMatrix[i] = jointMat;
+			}
+			parent->mesh->uniformBlock.jointcount = (float)joints.size();
+
+			memcpy(parent->mesh->uniformBuffer.mapped, &parent->mesh->uniformBlock, sizeof(parent->mesh->uniformBlock));
 		}
 	};
 
@@ -477,6 +513,8 @@ namespace vkglTF
 			glm::vec3 pos;
 			glm::vec3 normal;
 			glm::vec2 uv;
+			glm::vec4 joint0;
+			glm::vec4 weight0;
 		};
 
 		struct Vertices {
@@ -491,6 +529,8 @@ namespace vkglTF
 
 		std::vector<Node*> nodes;
 		std::vector<Node*> linearNodes;
+
+		std::vector<Skin*> skins;
 
 		std::vector<Texture> textures;
 		std::vector<Material> materials;
@@ -524,6 +564,7 @@ namespace vkglTF
 			newNode->index = nodeIndex;
 			newNode->parent = parent;
 			newNode->name = node.name;
+			newNode->skinIndex = node.skin;
 			newNode->matrix = glm::mat4(1.0f);
 
 			// Generate local node matrix
@@ -567,11 +608,14 @@ namespace vkglTF
 					uint32_t indexCount = 0;
 					glm::vec3 posMin{};
 					glm::vec3 posMax{};
+					bool hasSkin = false;
 					// Vertices
 					{
 						const float *bufferPos = nullptr;
 						const float *bufferNormals = nullptr;
 						const float *bufferTexCoords = nullptr;
+						const uint16_t *bufferJoints = nullptr;
+						const float *bufferWeights = nullptr;
 
 						// Position attribute is required
 						assert(primitive.attributes.find("POSITION") != primitive.attributes.end());
@@ -594,11 +638,29 @@ namespace vkglTF
 							bufferTexCoords = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
 						}
 
+						// Skinning
+						// Joints
+						if (primitive.attributes.find("JOINTS_0") != primitive.attributes.end()) {
+							const tinygltf::Accessor &jointAccessor = model.accessors[primitive.attributes.find("JOINTS_0")->second];
+							const tinygltf::BufferView &jointView = model.bufferViews[jointAccessor.bufferView];
+							bufferJoints = reinterpret_cast<const uint16_t *>(&(model.buffers[jointView.buffer].data[jointAccessor.byteOffset + jointView.byteOffset]));
+						}
+
+						if (primitive.attributes.find("WEIGHTS_0") != primitive.attributes.end()) {
+							const tinygltf::Accessor &uvAccessor = model.accessors[primitive.attributes.find("WEIGHTS_0")->second];
+							const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
+							bufferWeights = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
+						}
+
+						hasSkin = (bufferJoints && bufferWeights);
+
 						for (size_t v = 0; v < posAccessor.count; v++) {
 							Vertex vert{};
 							vert.pos = glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
 							vert.normal = glm::normalize(glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
 							vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
+							vert.joint0 = hasSkin ? glm::make_vec4(&bufferJoints[v * 4]) : glm::vec4(0.0f);
+							vert.weight0 = hasSkin ? glm::make_vec4(&bufferWeights[v * 4]) : glm::vec4(0.0f);
 							vertexBuffer.push_back(vert);
 						}
 					}
@@ -652,6 +714,38 @@ namespace vkglTF
 				nodes.push_back(newNode);
 			}
 			linearNodes.push_back(newNode);
+		}
+
+		void loadSkins(tinygltf::Model &gltfModel)
+		{
+			for (tinygltf::Skin &source : gltfModel.skins) {
+				Skin *newSkin = new Skin{};
+				newSkin->name = source.name;
+				
+				// Find skeleton root node
+				if (source.skeleton > -1) {
+					newSkin->skeletonRoot = nodeFromIndex(source.skeleton);
+				}
+
+				// Find joint nodes
+				for (int jointIndex : source.joints) {
+					Node* node = nodeFromIndex(jointIndex);
+					if (node) {
+						newSkin->joints.push_back(nodeFromIndex(jointIndex));
+					}
+				}
+
+				// Get inverse bind matrices from buffer
+				if (source.inverseBindMatrices > -1) {
+					const tinygltf::Accessor &accessor = gltfModel.accessors[source.inverseBindMatrices];
+					const tinygltf::BufferView &bufferView = gltfModel.bufferViews[accessor.bufferView];
+					const tinygltf::Buffer &buffer = gltfModel.buffers[bufferView.buffer];
+					newSkin->inverseBindMatrices.resize(accessor.count);
+					memcpy(newSkin->inverseBindMatrices.data(), &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(glm::mat4));
+				}
+
+				skins.push_back(newSkin);
+			}
 		}
 
 		void loadImages(tinygltf::Model &gltfModel, vks::VulkanDevice *device, VkQueue transferQueue)
@@ -855,10 +949,15 @@ namespace vkglTF
 				if (gltfModel.animations.size() > 0) {
 					loadAnimations(gltfModel);
 				}
+				loadSkins(gltfModel);
+
 				for (auto node : linearNodes) {
 					// Initial pose
 					if (node->mesh) {
 						node->update();
+					}
+					if (node->skinIndex > -1) {
+						skins[node->skinIndex]->parent = node;
 					}
 				}
 			}
@@ -1040,6 +1139,9 @@ namespace vkglTF
 			if (updated) {
 				for (auto &node : nodes) {
 					node->update();
+				}
+				for (auto &skin : skins) {
+					skin->update();
 				}
 			}
 		}
