@@ -186,10 +186,9 @@ public:
 		camera.rotationSpeed = 0.25f;
 		camera.movementSpeed = 0.1f;
 
-		camera.setPosition({ 0.0f, 0.0f, 4.25f });
+		camera.setPosition({ 0.0f, 0.0f, 2.5f });
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 
-		modelrot.y = -30.0f;
 	}
 
 	~VulkanExample()
@@ -380,6 +379,9 @@ public:
 
 		textures.environmentCube.loadFromFile(envMapFile, VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
 		models.object.loadFromFile(sceneFile, vulkanDevice, queue);
+		// Scale and center model to fit into viewport
+		scale = 1.0f / models.object.dimensions.radius;
+		camera.setPosition(glm::vec3(-models.object.dimensions.center.x * scale, -models.object.dimensions.center.y * scale, camera.position.z));
 	}
 
 	void setupNodeDescriptorSet(vkglTF::Node *node) {
