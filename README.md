@@ -1,9 +1,7 @@
 # Vulkan physical based rendering using glTF 2.0 models
 
 <center>
-<img src="./screenshots/damagedhelmet.jpg" width="644px">
-<img src="./screenshots/polly.jpg" width="320px">
-<img src="./screenshots/busterdrone.jpg" width="320px">
+<img src="./screenshots/damagedhelmet.jpg" width="644px"> <img src="./screenshots/polly.jpg" width="320px"> <img src="./screenshots/busterdrone.jpg" width="320px">
 
 [YouTube Vulkan glTF 2.0 playlist](https://www.youtube.com/watch?v=sl7iN-vQCOs&list=PLy80eMh1-zPUz7y1JtFiS9I6H7_trBUAf)
 </center>
