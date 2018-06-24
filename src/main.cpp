@@ -437,7 +437,7 @@ public:
 		}
 
 		std::vector<VkDescriptorPoolSize> poolSizes = {
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 + meshCount },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4 + meshCount },
 			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount }
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
