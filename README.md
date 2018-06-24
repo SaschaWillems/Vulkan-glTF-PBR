@@ -1,4 +1,4 @@
-# Vulkan physical based rendering using glTF 2.0 models
+# Vulkan physically-Based Rendering using glTF 2.0 models
 
 <img src="./screenshots/damagedhelmet.jpg" width="644px"> <img src="./screenshots/polly.jpg" width="320px"> <img src="./screenshots/busterdrone.jpg" width="320px">
 
@@ -6,7 +6,7 @@
 
 ## About
 
-Physical based rendering example implementation with image based lighting in Vulkan using glTF 2.0 models with a metallic/roughness workflow.
+Physically-Based Rendering example implementation with image based lighting in Vulkan using glTF 2.0 models with a metallic/roughness workflow. The lighting equation is based on the [reference glTF PBR implementation](https://github.com/KhronosGroup/glTF-WebGL-PBR) from Khronos. 
 
 ## glTF 2.0 Model loading
 
