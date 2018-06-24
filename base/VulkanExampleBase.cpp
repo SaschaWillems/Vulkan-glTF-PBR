@@ -249,7 +249,7 @@ void VulkanExampleBase::prepare()
 
 		VkRenderPassCreateInfo renderPassCI = {};
 		renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassCI.attachmentCount = attachments.size();
+		renderPassCI.attachmentCount = static_cast<uint32_t>(attachments.size());
 		renderPassCI.pAttachments = attachments.data();
 		renderPassCI.subpassCount = 1;
 		renderPassCI.pSubpasses = &subpass;

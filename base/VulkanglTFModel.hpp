@@ -31,7 +31,7 @@
 
 namespace vkglTF
 {
-	class Node;
+	struct Node;
 
 	/*
 		glTF texture loading class
@@ -390,7 +390,7 @@ namespace vkglTF
 	};
 
 	/*
-	glTF skin
+		glTF skin
 	*/
 	struct Skin {
 		std::string name;
@@ -1084,7 +1084,7 @@ namespace vkglTF
 		{
 			if (index > static_cast<uint32_t>(animations.size()) - 1) {
 				std::cout << "No animation with index " << index << std::endl;
-				exit;
+				return;
 			}
 			Animation &animation = animations[index];
 

@@ -37,6 +37,8 @@ private:
 		{
 			matrices.view = transM * rotM;
 		}
+
+		updated = true;
 	};
 public:
 	enum CameraType { lookat, firstperson };
@@ -47,6 +49,8 @@ public:
 
 	float rotationSpeed = 1.0f;
 	float movementSpeed = 1.0f;
+
+	bool updated = false;
 
 	struct
 	{
@@ -67,7 +71,7 @@ public:
 		return keys.left || keys.right || keys.up || keys.down;
 	}
 
-	float getNearClip() { 
+	float getNearClip() {
 		return znear;
 	}
 
@@ -120,6 +124,7 @@ public:
 
 	void update(float deltaTime)
 	{
+		updated = false;
 		if (type == CameraType::firstperson)
 		{
 			if (moving())
@@ -168,7 +173,7 @@ public:
 
 			float moveSpeed = deltaTime * movementSpeed * 2.0f;
 			float rotSpeed = deltaTime * rotationSpeed * 50.0f;
-			 
+
 			// Move
 			if (fabsf(axisLeft.y) > deadZone)
 			{

@@ -101,7 +101,7 @@ public:
 	} textures;
 
 	struct Models {
-		vkglTF::Model object;
+		vkglTF::Model scene;
 		vkglTF::Model skybox;
 	} models;
 
@@ -113,7 +113,7 @@ public:
 	};
 
 	struct UniformBuffers {
-		Buffer object;
+		Buffer scene;
 		Buffer skybox;
 		Buffer params;
 	} uniformBuffers;
@@ -148,10 +148,11 @@ public:
 	} descriptorSetLayouts;
 
 	struct DescriptorSets {
-		VkDescriptorSet object;
+		VkDescriptorSet scene;
 		VkDescriptorSet skybox;
 	} descriptorSets;
 
+	uint32_t animationIndex = 0;
 	float animationTimer = 0.0f;
 
 	float scale = 1.0f;
@@ -163,6 +164,7 @@ public:
 
 	bool rotateModel = false;
 	glm::vec3 modelrot = glm::vec3(0.0f);
+	glm::vec3 modelPos = glm::vec3(0.0f);
 
 	struct PushConstBlockMaterial {
 		glm::vec4 baseColorFactor;
@@ -189,6 +191,7 @@ public:
 		camera.setPosition({ 0.0f, 0.0f, 2.5f });
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 
+		paused = true;
 	}
 
 	~VulkanExample()
@@ -202,11 +205,11 @@ public:
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.material, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.node, nullptr);
 
-		models.object.destroy(device);
+		models.scene.destroy(device);
 		models.skybox.destroy(device);
 
-		vkDestroyBuffer(device, uniformBuffers.object.buffer, nullptr);
-		vkFreeMemory(device, uniformBuffers.object.memory, nullptr);
+		vkDestroyBuffer(device, uniformBuffers.scene.buffer, nullptr);
+		vkFreeMemory(device, uniformBuffers.scene.memory, nullptr);
 		vkDestroyBuffer(device, uniformBuffers.skybox.buffer, nullptr);
 		vkFreeMemory(device, uniformBuffers.skybox.memory, nullptr);
 		vkDestroyBuffer(device, uniformBuffers.params.buffer, nullptr);
@@ -226,7 +229,7 @@ public:
 				if (primitive->material.alphaMode == alphaMode) {
 
 					const std::vector<VkDescriptorSet> descriptorsets = {
-						descriptorSets.object,
+						descriptorSets.scene,
 						primitive->material.descriptorSet,
 						node->mesh->uniformBuffer.descriptorSet,
 					};
@@ -264,12 +267,12 @@ public:
 
 		VkClearValue clearValues[3];
 		if (settings.multiSampling) {
-			clearValues[0].color = { { 1.0f, 1.0f, 1.0f, 1.0f } };
-			clearValues[1].color = { { 1.0f, 1.0f, 1.0f, 1.0f } };
+			clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+			clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 			clearValues[2].depthStencil = { 1.0f, 0 };
 		}
 		else {
-			clearValues[0].color = { { 0.1f, 0.1f, 0.1f, 1.0f } };
+			clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 			clearValues[1].depthStencil = { 1.0f, 0 };
 		}
 
@@ -308,7 +311,7 @@ public:
 
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
 
-			vkglTF::Model &model = models.object;
+			vkglTF::Model &model = models.scene;
 
 			vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &model.vertices.buffer, offsets);
 			vkCmdBindIndexBuffer(drawCmdBuffers[i], model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -321,10 +324,10 @@ public:
 			// TODO: Correct depth sorting
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrAlphaBlend);
 			for (auto node : model.nodes) {
-				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_BLEND);
+				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_MASK);
 			}
 			for (auto node : model.nodes) {
-				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_MASK);
+				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_BLEND);
 			}
 
 			vkCmdEndRenderPass(drawCmdBuffers[i]);
@@ -349,7 +352,6 @@ public:
 		}
 #endif
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
-		models.skybox.loadFromFile(assetpath + "models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
 
 		std::string sceneFile = assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf";
 		std::string envMapFile = assetpath + "textures/papermill_hdr16f_cube.ktx";
@@ -376,10 +378,13 @@ public:
 		}
 
 		textures.environmentCube.loadFromFile(envMapFile, VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
-		models.object.loadFromFile(sceneFile, vulkanDevice, queue);
+		models.scene.loadFromFile(sceneFile, vulkanDevice, queue);
+
+		models.skybox.loadFromFile(assetpath + "models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
+
 		// Scale and center model to fit into viewport
-		scale = 1.0f / models.object.dimensions.radius;
-		camera.setPosition(glm::vec3(-models.object.dimensions.center.x * scale, -models.object.dimensions.center.y * scale, camera.position.z));
+		scale = 1.0f / models.scene.dimensions.radius;
+		camera.setPosition(glm::vec3(-models.scene.dimensions.center.x * scale, -models.scene.dimensions.center.y * scale, camera.position.z));
 	}
 
 	void setupNodeDescriptorSet(vkglTF::Node *node) {
@@ -406,16 +411,6 @@ public:
 		}
 	}
 
-	void getPrimitiveCount(vkglTF::Node *node, uint32_t &count)
-	{
-		if (node->mesh) {
-			count++;
-		}
-		for (auto child : node->children) {
-			getPrimitiveCount(child, count);
-		}
-	}
-
 	void setupDescriptors()
 	{
 		/*
@@ -423,31 +418,33 @@ public:
 		*/
 		uint32_t imageSamplerCount = 0;
 		uint32_t materialCount = 0;
-		uint32_t primitiveCount = 0;
+		uint32_t meshCount = 0;
 
 		// Environment samplers (radiance, irradiance, brdf lut)
 		imageSamplerCount += 3;
 
-		std::vector<vkglTF::Model*> modellist = { &models.skybox, &models.object };
+		std::vector<vkglTF::Model*> modellist = { &models.skybox, &models.scene };
 		for (auto &model : modellist) {
 			for (auto &material : model->materials) {
 				imageSamplerCount += 5;
 				materialCount++;
 			}
-			for (auto node : model->nodes) {
-				getPrimitiveCount(node, primitiveCount);
+			for (auto node : model->linearNodes) {
+				if (node->mesh) {
+					meshCount++;
+				}
 			}
 		}
 
 		std::vector<VkDescriptorPoolSize> poolSizes = {
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1024 }, // TODO
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 + meshCount },
 			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount }
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		descriptorPoolCI.poolSizeCount = 2;
 		descriptorPoolCI.pPoolSizes = poolSizes.data();
-		descriptorPoolCI.maxSets = 2 + materialCount + primitiveCount;
+		descriptorPoolCI.maxSets = 2 + materialCount + meshCount;
 		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool));
 
 		/*
@@ -474,42 +471,42 @@ public:
 			descriptorSetAllocInfo.descriptorPool = descriptorPool;
 			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.scene;
 			descriptorSetAllocInfo.descriptorSetCount = 1;
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.object));
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.scene));
 
 			std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};
 
 			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			writeDescriptorSets[0].descriptorCount = 1;
-			writeDescriptorSets[0].dstSet = descriptorSets.object; // TODO: Rename to scene?
+			writeDescriptorSets[0].dstSet = descriptorSets.scene;
 			writeDescriptorSets[0].dstBinding = 0;
-			writeDescriptorSets[0].pBufferInfo = &uniformBuffers.object.descriptor;
+			writeDescriptorSets[0].pBufferInfo = &uniformBuffers.scene.descriptor;
 
 			writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			writeDescriptorSets[1].descriptorCount = 1;
-			writeDescriptorSets[1].dstSet = descriptorSets.object;
+			writeDescriptorSets[1].dstSet = descriptorSets.scene;
 			writeDescriptorSets[1].dstBinding = 1;
 			writeDescriptorSets[1].pBufferInfo = &uniformBuffers.params.descriptor;
 
 			writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			writeDescriptorSets[2].descriptorCount = 1;
-			writeDescriptorSets[2].dstSet = descriptorSets.object;
+			writeDescriptorSets[2].dstSet = descriptorSets.scene;
 			writeDescriptorSets[2].dstBinding = 2;
 			writeDescriptorSets[2].pImageInfo = &textures.irradianceCube.descriptor;
 
 			writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			writeDescriptorSets[3].descriptorCount = 1;
-			writeDescriptorSets[3].dstSet = descriptorSets.object;
+			writeDescriptorSets[3].dstSet = descriptorSets.scene;
 			writeDescriptorSets[3].dstBinding = 3;
 			writeDescriptorSets[3].pImageInfo = &textures.prefilteredCube.descriptor;
 
 			writeDescriptorSets[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			writeDescriptorSets[4].descriptorCount = 1;
-			writeDescriptorSets[4].dstSet = descriptorSets.object;
+			writeDescriptorSets[4].dstSet = descriptorSets.scene;
 			writeDescriptorSets[4].dstBinding = 4;
 			writeDescriptorSets[4].pImageInfo = &textures.lutBrdf.descriptor;
 
@@ -532,7 +529,7 @@ public:
 			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.material));
 
 			// Per-Material descriptor sets
-			for (auto &material : models.object.materials) {
+			for (auto &material : models.scene.materials) {
 				VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
 				descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 				descriptorSetAllocInfo.descriptorPool = descriptorPool;
@@ -573,7 +570,7 @@ public:
 				VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.node));
 
 				// Per-Node descriptor set
-				for (auto &node : models.object.nodes) {
+				for (auto &node : models.scene.nodes) {
 					setupNodeDescriptorSet(node);
 				}
 			}
@@ -1561,7 +1558,7 @@ public:
 					break;
 				case PREFILTEREDENV:
 					textures.prefilteredCube = cubemap;
-					uboParams.prefilteredCubeMipLevels = numMips;
+					uboParams.prefilteredCubeMipLevels = static_cast<float>(numMips);
 					break;
 			};
 
@@ -1581,8 +1578,8 @@ public:
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 			sizeof(uboMatrices),
-			&uniformBuffers.object.buffer,
-			&uniformBuffers.object.memory));
+			&uniformBuffers.scene.buffer,
+			&uniformBuffers.scene.memory));
 
 		// Skybox vertex shader uniform buffer
 		VK_CHECK_RESULT(vulkanDevice->createBuffer(
@@ -1601,12 +1598,12 @@ public:
 			&uniformBuffers.params.memory));
 
 		// Descriptors
-		uniformBuffers.object.descriptor = { uniformBuffers.object.buffer, 0, sizeof(uboMatrices) };
+		uniformBuffers.scene.descriptor = { uniformBuffers.scene.buffer, 0, sizeof(uboMatrices) };
 		uniformBuffers.skybox.descriptor = { uniformBuffers.skybox.buffer, 0, sizeof(uboMatrices) };
 		uniformBuffers.params.descriptor = { uniformBuffers.params.buffer, 0, sizeof(uboParams) };
 
 		// Map persistent
-		VK_CHECK_RESULT(vkMapMemory(device, uniformBuffers.object.memory, 0, sizeof(uboMatrices), 0, &uniformBuffers.object.mapped));
+		VK_CHECK_RESULT(vkMapMemory(device, uniformBuffers.scene.memory, 0, sizeof(uboMatrices), 0, &uniformBuffers.scene.mapped));
 		VK_CHECK_RESULT(vkMapMemory(device, uniformBuffers.skybox.memory, 0, sizeof(uboMatrices), 0, &uniformBuffers.skybox.mapped));
 		VK_CHECK_RESULT(vkMapMemory(device, uniformBuffers.params.memory, 0, sizeof(uboParams), 0, &uniformBuffers.params.mapped));
 
@@ -1621,7 +1618,8 @@ public:
 
 		uboMatrices.view = camera.matrices.view;
 
-		uboMatrices.model = glm::rotate(glm::mat4(1.0f), glm::radians(modelrot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+		uboMatrices.model = glm::translate(glm::mat4(1.0f), modelPos);
+		uboMatrices.model = glm::rotate(uboMatrices.model, glm::radians(modelrot.x), glm::vec3(1.0f, 0.0f, 0.0f));
 		uboMatrices.model = glm::rotate(uboMatrices.model, glm::radians(modelrot.y), glm::vec3(0.0f, 1.0f, 0.0f));
 		uboMatrices.model = glm::rotate(uboMatrices.model, glm::radians(modelrot.z), glm::vec3(0.0f, 0.0f, 1.0f));
 		uboMatrices.model = glm::scale(uboMatrices.model, glm::vec3(scale));
@@ -1632,7 +1630,7 @@ public:
 			camera.position.z * cos(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x))
 		);
 
-		memcpy(uniformBuffers.object.mapped, &uboMatrices, sizeof(uboMatrices));
+		memcpy(uniformBuffers.scene.mapped, &uboMatrices, sizeof(uboMatrices));
 
 		// Skybox
 		uboMatrices.model = glm::mat4(glm::mat3(camera.matrices.view));
@@ -1691,24 +1689,21 @@ public:
 					modelrot.y -= 360.0f;
 				}
 			}
-			if (models.object.animations.size() > 0) {
-				animationTimer += frameTimer * 1.0f;
-				if (animationTimer > models.object.animations[0].end) {
-					animationTimer -= models.object.animations[0].end;
+			if (models.scene.animations.size() > 0) {
+				animationTimer += frameTimer * 0.75f;
+				if (animationTimer > models.scene.animations[animationIndex].end) {
+					animationTimer -= models.scene.animations[animationIndex].end;
 				}
-				models.object.updateAnimation(0, animationTimer);
+				models.scene.updateAnimation(animationIndex, animationTimer);
 			}
 			updateParams();
 			if (rotateModel) {
 				updateUniformBuffers();
 			}
 		}
-
-	}
-
-	virtual void viewChanged()
-	{
-		updateUniformBuffers();
+		if (camera.updated) {
+			updateUniformBuffers();
+		}
 	}
 
 #if !defined(VK_USE_PLATFORM_ANDROID_KHR)
