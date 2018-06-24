@@ -1,6 +1,12 @@
 # Vulkan physical based rendering using glTF 2.0 models
 
-<img src="./screenshots/finalresult.png" width="640px">
+<center>
+<img src="./screenshots/damagedhelmet.jpg" width="644px">
+<img src="./screenshots/polly.jpg" width="320px">
+<img src="./screenshots/busterdrone.jpg" width="320px">
+
+[YouTube Vulkan glTF 2.0 playlist](https://www.youtube.com/watch?v=sl7iN-vQCOs&list=PLy80eMh1-zPUz7y1JtFiS9I6H7_trBUAf)
+</center>
 
 ## About
 
@@ -8,9 +14,29 @@ Physical based rendering example implementation with image based lighting in Vul
 
 ## glTF 2.0 Model loading
 
-Model loading and rendering is implemented in the [vkglTF::Model](./base/VulkanglTFModel.hpp) class and uses the [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files. It also does texture loading from all files supported by glTF 2.0 (.png, .jpg, etc.) and generates a full mip-chain for every texture loaded. 
+Model loading is implemented in the [vkglTF::Model](./base/VulkanglTFModel.hpp) class, using [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files, so e.g. all file formats supported by tinyglTF are suported. This class converts the glTF structures into Vulkan compatible structures used for setup and rendering.
 
-Note that this is not a full glTF model class implementation and as of now only supports static models, only supports a single material, etc. I plan on adding more stuff to the Vulkan glTF 2.0 loader to make it more general in the future.
+The following major glTF 2.0 features are currently supported by the [vkglTF::Model](./base/VulkanglTFModel.hpp) class:
+
+* [x] Loading arbitrary glTF 2.0 models
+    * [x] Full node hierarchy
+    * [x] Multiple materials (Metallic-Roughness)
+    * [x] Animations   
+        * [x] Articulated (translate, rotate, scale)
+        * [x] Skinned (up to 64 joints per skin)
+        * [ ] Morph targets
+
+Note that the model loader does not fully implement all aspects of the glTF 2.0 standard, and as such there is no guarantee that all glTF 2.0 models work properly.
+
+## Loading different scenes
+
+The repository only includes a basic scene setup with the static "damaged helmet" pbr sample model. The official collection of glTF 2.0 sample models can be found at [here](https://github.com/KhronosGroup/glTF-Sample-Models).
+
+To load a different scene instead, specify the glTF model file name as a command line argument, e.g.:
+
+```
+Vulkan-glTF-pbr "PATH-TO-glTF-Sample-Models\2.0\BrainStem\glTF\brainstem.gltf"
+```
 
 ## Texture map generation
 
