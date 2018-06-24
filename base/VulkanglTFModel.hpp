@@ -364,7 +364,7 @@ namespace vkglTF
 
 		struct UniformBlock {
 			glm::mat4 matrix;
-			glm::mat4 jointMatrix[64]{};
+			glm::mat4 jointMatrix[128]{};
 			float jointcount{ 0 };
 		} uniformBlock;
 
@@ -652,7 +652,8 @@ namespace vkglTF
 							vert.pos = glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
 							vert.normal = glm::normalize(glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
 							vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
-							vert.joint0 = hasSkin ? glm::make_vec4(&bufferJoints[v * 4]) : glm::vec4(0.0f);
+							
+							vert.joint0 = hasSkin ? glm::vec4(glm::make_vec4(&bufferJoints[v * 4])) : glm::vec4(0.0f);
 							vert.weight0 = hasSkin ? glm::make_vec4(&bufferWeights[v * 4]) : glm::vec4(0.0f);
 							vertexBuffer.push_back(vert);
 						}
