@@ -364,7 +364,7 @@ namespace vkglTF
 
 		struct UniformBlock {
 			glm::mat4 matrix;
-			glm::mat4 jointMatrix[128]{};
+			glm::mat4 jointMatrix[64]{};
 			float jointcount{ 0 };
 		} uniformBlock;
 
