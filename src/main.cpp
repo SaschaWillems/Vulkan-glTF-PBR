@@ -1,5 +1,5 @@
 /*
-* Vulkan Example - Physical based rendering a glTF 2.0 model (metal/roughness workflow) with image based lighting
+* Vulkan Example - Physical based rendering a glTF 2.0 model with image based lighting
 *
 * Note: Requires the separate asset pack (see data/README.md)
 *
@@ -166,10 +166,16 @@ public:
 	glm::vec3 modelrot = glm::vec3(0.0f);
 	glm::vec3 modelPos = glm::vec3(0.0f);
 
+	enum PBRWorkflows{ PBR_WORKFLOW_METALLIC_ROUGHNESS = 0, PBR_WORKFLOW_SPECULAR_GLOSINESS = 1 };
+
 	struct PushConstBlockMaterial {
 		glm::vec4 baseColorFactor;
-		float hasBaseColorTexture;
-		float hasMetallicRoughnessTexture;
+		glm::vec4 emissiveFactor;
+		glm::vec4 diffuseFactor;
+		glm::vec4 specularFactor;
+		float workflow;
+		float hasColorTexture;
+		float hasPhysicalDescriptorTexture;
 		float hasNormalTexture;
 		float hasOcclusionTexture;
 		float hasEmissiveTexture;
@@ -190,8 +196,6 @@ public:
 
 		camera.setPosition({ 0.0f, 0.0f, 2.5f });
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
-
-		paused = true;
 	}
 
 	~VulkanExample()
@@ -236,18 +240,35 @@ public:
 					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
 
 					// Pass material parameters as push constants
-					PushConstBlockMaterial pushConstBlockMaterial{
-						primitive->material.baseColorFactor,
-						static_cast<float>(primitive->material.baseColorTexture != nullptr),
-						static_cast<float>(primitive->material.metallicRoughnessTexture != nullptr),
-						static_cast<float>(primitive->material.normalTexture != nullptr),
-						static_cast<float>(primitive->material.occlusionTexture != nullptr),
-						static_cast<float>(primitive->material.emissiveTexture != nullptr),
-						primitive->material.metallicFactor,
-						primitive->material.roughnessFactor,
-						static_cast<float>(primitive->material.alphaMode == vkglTF::Material::ALPHAMODE_MASK),
-						primitive->material.alphaCutoff
-					};
+					PushConstBlockMaterial pushConstBlockMaterial{};					
+					pushConstBlockMaterial.emissiveFactor = primitive->material.emissiveFactor;
+					pushConstBlockMaterial.hasNormalTexture = static_cast<float>(primitive->material.normalTexture != nullptr);
+					pushConstBlockMaterial.hasOcclusionTexture = static_cast<float>(primitive->material.occlusionTexture != nullptr);
+					pushConstBlockMaterial.hasEmissiveTexture = static_cast<float>(primitive->material.emissiveTexture != nullptr);
+					pushConstBlockMaterial.alphaMask = static_cast<float>(primitive->material.alphaMode == vkglTF::Material::ALPHAMODE_MASK);
+					pushConstBlockMaterial.alphaMaskCutoff = primitive->material.alphaCutoff;
+
+					// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
+
+					if (primitive->material.pbrWorkflows.metallicRoughness) {
+						// Metallic roughness workflow
+						pushConstBlockMaterial.workflow = static_cast<float>(PBR_WORKFLOW_METALLIC_ROUGHNESS);
+						pushConstBlockMaterial.baseColorFactor = primitive->material.baseColorFactor;
+						pushConstBlockMaterial.metallicFactor = primitive->material.metallicFactor;
+						pushConstBlockMaterial.roughnessFactor = primitive->material.roughnessFactor;
+						pushConstBlockMaterial.hasPhysicalDescriptorTexture = static_cast<float>(primitive->material.metallicRoughnessTexture != nullptr);
+						pushConstBlockMaterial.hasColorTexture = static_cast<float>(primitive->material.baseColorTexture != nullptr);
+					}
+
+					if (primitive->material.pbrWorkflows.specularGlossiness) {
+						// Specular glossiness workflow
+						pushConstBlockMaterial.workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSINESS);
+						pushConstBlockMaterial.hasPhysicalDescriptorTexture = static_cast<float>(primitive->material.extension.specularGlossinessTexture != nullptr);
+						pushConstBlockMaterial.hasColorTexture = static_cast<float>(primitive->material.extension.diffuseTexture != nullptr);
+						pushConstBlockMaterial.diffuseFactor = primitive->material.extension.diffuseFactor;
+						pushConstBlockMaterial.specularFactor = glm::vec4(primitive->material.extension.specularFactor, 1.0f);
+					}
+
 					vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
 
 					vkCmdDrawIndexed(commandBuffer, primitive->indexCount, 1, primitive->firstIndex, 0, 0);
@@ -538,12 +559,32 @@ public:
 				VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &material.descriptorSet));
 
 				std::vector<VkDescriptorImageInfo> imageDescriptors = {
-					material.baseColorTexture ? material.baseColorTexture->descriptor : textures.empty.descriptor,
+					textures.empty.descriptor,
+					textures.empty.descriptor,
 					material.normalTexture ? material.normalTexture->descriptor : textures.empty.descriptor,
 					material.occlusionTexture ? material.occlusionTexture->descriptor : textures.empty.descriptor,
-					material.metallicRoughnessTexture ? material.metallicRoughnessTexture->descriptor : textures.empty.descriptor,
 					material.emissiveTexture ? material.emissiveTexture->descriptor : textures.empty.descriptor
 				};
+
+				// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
+
+				if (material.pbrWorkflows.metallicRoughness) {
+					if (material.baseColorTexture) {
+						imageDescriptors[0] = material.baseColorTexture->descriptor;
+					}
+					if (material.metallicRoughnessTexture) {
+						imageDescriptors[1] = material.metallicRoughnessTexture->descriptor;
+					}
+				}
+
+				if (material.pbrWorkflows.specularGlossiness) {
+					if (material.extension.diffuseTexture) {
+						imageDescriptors[0] = material.extension.diffuseTexture->descriptor;
+					}
+					if (material.extension.specularGlossinessTexture) {
+						imageDescriptors[1] = material.extension.specularGlossinessTexture->descriptor;
+					}
+				}
 
 				std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};
 				for (size_t i = 0; i < imageDescriptors.size(); i++) {

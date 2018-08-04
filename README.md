@@ -6,7 +6,7 @@
 
 ## About
 
-Physically-Based Rendering example implementation with image based lighting in Vulkan using glTF 2.0 models with a metallic/roughness workflow. The lighting equation is based on the [reference glTF PBR implementation](https://github.com/KhronosGroup/glTF-WebGL-PBR) from Khronos. 
+Physically-Based Rendering example implementation with image based lighting in Vulkan using glTF 2.0 models. The lighting equation is based on the [reference glTF PBR implementation](https://github.com/KhronosGroup/glTF-WebGL-PBR) from Khronos. 
 
 ## glTF 2.0 Model loading
 
@@ -16,7 +16,9 @@ The following major glTF 2.0 features are currently supported by the [vkglTF::Mo
 
 * [x] Loading arbitrary glTF 2.0 models
     * [x] Full node hierarchy
-    * [x] Multiple materials (Metallic-Roughness)
+    * [x] Full PBR material support
+        * [x] Metallic-Roughness workflow
+        * [x] Specular-Glossiness workflow (extension)
     * [x] Animations   
         * [x] Articulated (translate, rotate, scale)
         * [x] Skinned (up to 64 joints per skin)

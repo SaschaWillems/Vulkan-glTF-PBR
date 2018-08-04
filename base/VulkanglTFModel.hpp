@@ -311,11 +311,22 @@ namespace vkglTF
 		float metallicFactor = 1.0f;
 		float roughnessFactor = 1.0f;
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
+		glm::vec4 emissiveFactor = glm::vec4(1.0f);
 		vkglTF::Texture *baseColorTexture;
 		vkglTF::Texture *metallicRoughnessTexture;
 		vkglTF::Texture *normalTexture;
 		vkglTF::Texture *occlusionTexture;
 		vkglTF::Texture *emissiveTexture;
+		struct Extension {
+			vkglTF::Texture *specularGlossinessTexture;
+			vkglTF::Texture *diffuseTexture;
+			glm::vec4 diffuseFactor = glm::vec4(1.0f);
+			glm::vec3 specularFactor = glm::vec3(0.0f);
+		} extension;
+		struct PbrWorkflows {
+			bool metallicRoughness = true;
+			bool specularGlossiness = false;
+		} pbrWorkflows;
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 	};
 
@@ -791,6 +802,29 @@ namespace vkglTF
 				if (mat.additionalValues.find("alphaCutoff") != mat.additionalValues.end()) {
 					material.alphaCutoff = static_cast<float>(mat.additionalValues["alphaCutoff"].Factor());
 				}
+				if (mat.additionalValues.find("emissiveFactor") != mat.additionalValues.end()) {
+					material.emissiveFactor = glm::vec4(glm::make_vec3(mat.additionalValues["emissiveFactor"].ColorFactor().data()), 1.0);
+					material.emissiveFactor = glm::vec4(0.0f);
+				}
+
+				// Extensions
+				if (mat.extPBRValues.size() > 0) {
+					// KHR_materials_pbrSpecularGlossiness
+					if (mat.extPBRValues.find("specularGlossinessTexture") != mat.extPBRValues.end()) {
+						material.extension.specularGlossinessTexture = &textures[gltfModel.textures[mat.extPBRValues["specularGlossinessTexture"].TextureIndex()].source];
+						material.pbrWorkflows.specularGlossiness = true;
+					}
+					if (mat.extPBRValues.find("diffuseTexture") != mat.extPBRValues.end()) {
+						material.extension.diffuseTexture = &textures[gltfModel.textures[mat.extPBRValues["diffuseTexture"].TextureIndex()].source];
+					}
+					if (mat.extPBRValues.find("diffuseFactor") != mat.extPBRValues.end()) {
+						material.extension.diffuseFactor = glm::make_vec4(mat.extPBRValues["diffuseFactor"].ColorFactor().data());
+					}
+					if (mat.extPBRValues.find("specularFactor") != mat.extPBRValues.end()) {
+						material.extension.specularFactor = glm::vec4(glm::make_vec3(mat.extPBRValues["specularFactor"].ColorFactor().data()), 1.0);
+					}
+				}
+
 				materials.push_back(material);
 			}
 		}

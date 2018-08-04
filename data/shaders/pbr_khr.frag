@@ -1,5 +1,6 @@
 // PBR shader based on the Khronos WebGL PBR implementation
 // See https://github.com/KhronosGroup/glTF-WebGL-PBR
+// Supports both metallic roughness and specular glossiness inputs
 
 #version 450
 
@@ -29,22 +30,26 @@ layout (set = 0, binding = 4) uniform sampler2D samplerBRDFLUT;
 
 // Material bindings
 
-layout (set = 1, binding = 0) uniform sampler2D albedoMap;
-layout (set = 1, binding = 1) uniform sampler2D normalMap;
-layout (set = 1, binding = 2) uniform sampler2D aoMap;
-layout (set = 1, binding = 3) uniform sampler2D metallicMap;
+layout (set = 1, binding = 0) uniform sampler2D colorMap;
+layout (set = 1, binding = 1) uniform sampler2D physicalDescriptorMap;
+layout (set = 1, binding = 2) uniform sampler2D normalMap;
+layout (set = 1, binding = 3) uniform sampler2D aoMap;
 layout (set = 1, binding = 4) uniform sampler2D emissiveMap;
 
 layout (push_constant) uniform Material {
 	vec4 baseColorFactor;
+	vec4 emissiveFactor;
+	vec4 diffuseFactor;
+	vec4 specularFactor;
+	float workflow;
 	float hasBaseColorTexture;
-	float hasMetallicRoughnessTexture;
-	float hasNormalTexture;
-	float hasOcclusionTexture;
+	float hasPhysicalDescriptorTexture;
+	float hasNormalTexture;	
+	float hasOcclusionTexture;	
 	float hasEmissiveTexture;
-	float metallicFactor;
-	float roughnessFactor;
-	float alphaMask;
+	float metallicFactor;	
+	float roughnessFactor;	
+	float alphaMask;	
 	float alphaMaskCutoff;
 } material;
 
@@ -71,6 +76,9 @@ struct PBRInfo
 
 const float M_PI = 3.141592653589793;
 const float c_MinRoughness = 0.04;
+
+const float PBR_WORKFLOW_METALLIC_ROUGHNESS = 0.0;
+const float PBR_WORKFLOW_SPECULAR_GLOSINESS = 1.0f;
 
 #define MANUAL_SRGB 1
 
@@ -192,40 +200,85 @@ float microfacetDistribution(PBRInfo pbrInputs)
 	return roughnessSq / (M_PI * f * f);
 }
 
+// Gets metallic factor from specular glossiness workflow inputs 
+float convertMetallic(vec3 diffuse, vec3 specular, float maxSpecular) {
+	float perceivedDiffuse = sqrt(0.299 * diffuse.r * diffuse.r + 0.587 * diffuse.g * diffuse.g + 0.114 * diffuse.b * diffuse.b);
+	float perceivedSpecular = sqrt(0.299 * specular.r * specular.r + 0.587 * specular.g * specular.g + 0.114 * specular.b * specular.b);
+	if (perceivedSpecular < c_MinRoughness) {
+		return 0.0;
+	}
+	float a = c_MinRoughness;
+	float b = perceivedDiffuse * (1.0 - maxSpecular) / (1.0 - c_MinRoughness) + perceivedSpecular - 2.0 * c_MinRoughness;
+	float c = c_MinRoughness - perceivedSpecular;
+	float D = max(b * b - 4.0 * a * c, 0.0);
+	return clamp((-b + sqrt(D)) / (2.0 * a), 0.0, 1.0);
+}
+
 void main()
 {
-	// Metallic and Roughness material properties are packed together
-	// In glTF, these factors can be specified by fixed scalar values
-	// or from a metallic-roughness map
-	float perceptualRoughness = material.roughnessFactor;
-	float metallic = material.metallicFactor;
-	if (material.hasMetallicRoughnessTexture == 1.0f) {
-		// Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
-		// This layout intentionally reserves the 'r' channel for (optional) occlusion map data
-		vec4 mrSample = texture(metallicMap, inUV);
-		perceptualRoughness = mrSample.g * perceptualRoughness;
-		metallic = mrSample.b * metallic;
-	} else {
-		perceptualRoughness = clamp(perceptualRoughness, c_MinRoughness, 1.0);
-		metallic = clamp(metallic, 0.0, 1.0);
-	 }
-	// Roughness is authored as perceptual roughness; as is convention,
-	// convert to material roughness by squaring the perceptual roughness [2].
-	float alphaRoughness = perceptualRoughness * perceptualRoughness;
-
-	const float u_BaseColorFactor = 1.0f;
-
+	float perceptualRoughness;
+	float metallic;
+	vec3 diffuseColor;
 	vec4 baseColor;
-	// The albedo may be defined from a base texture or a flat color
-	if (material.hasBaseColorTexture == 1.0f) {
-		baseColor = SRGBtoLINEAR(texture(albedoMap, inUV)) * material.baseColorFactor;
-	} else {
-		baseColor = material.baseColorFactor;
-	}
 
 	vec3 f0 = vec3(0.04);
-	vec3 diffuseColor = baseColor.rgb * (vec3(1.0) - f0);
+
+	if (material.workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS) {
+		// Metallic and Roughness material properties are packed together
+		// In glTF, these factors can be specified by fixed scalar values
+		// or from a metallic-roughness map
+		perceptualRoughness = material.roughnessFactor;
+		metallic = material.metallicFactor;
+		if (material.hasPhysicalDescriptorTexture == 1.0f) {
+			// Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
+			// This layout intentionally reserves the 'r' channel for (optional) occlusion map data
+			vec4 mrSample = texture(physicalDescriptorMap, inUV);
+			perceptualRoughness = mrSample.g * perceptualRoughness;
+			metallic = mrSample.b * metallic;
+		} else {
+			perceptualRoughness = clamp(perceptualRoughness, c_MinRoughness, 1.0);
+			metallic = clamp(metallic, 0.0, 1.0);
+		}
+		// Roughness is authored as perceptual roughness; as is convention,
+		// convert to material roughness by squaring the perceptual roughness [2].
+
+		// The albedo may be defined from a base texture or a flat color
+		if (material.hasBaseColorTexture == 1.0f) {
+			baseColor = SRGBtoLINEAR(texture(colorMap, inUV)) * material.baseColorFactor;
+		} else {
+			baseColor = material.baseColorFactor;
+		}
+	}
+
+	if (material.workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS) {
+		// Values from specular glossiness workflow are converted to metallic roughness
+		if (material.hasPhysicalDescriptorTexture == 1.0f) {
+			perceptualRoughness = 1.0 - texture(physicalDescriptorMap, inUV).a;
+		} else {
+			perceptualRoughness = 0.0;
+		}
+
+		const float epsilon = 1e-6;
+
+		vec4 diffuse = SRGBtoLINEAR(texture(colorMap, inUV));
+		vec3 specular = SRGBtoLINEAR(texture(physicalDescriptorMap, inUV)).rgb;
+
+		float maxSpecular = max(max(specular.r, specular.g), specular.b);
+
+		// Convert metallic value from specular glossiness inputs
+		metallic = convertMetallic(diffuse.rgb, specular, maxSpecular);
+
+		vec3 baseColorDiffusePart = diffuse.rgb * ((1.0 - maxSpecular) / (1 - c_MinRoughness) / max(1 - metallic, epsilon)) * material.diffuseFactor.rgb;
+		vec3 baseColorSpecularPart = specular - (vec3(c_MinRoughness) * (1 - metallic) * (1 / max(metallic, epsilon))) * material.specularFactor.rgb;
+		baseColor = vec4(mix(baseColorDiffusePart, baseColorSpecularPart, metallic * metallic), diffuse.a);
+
+	}
+
+	diffuseColor = baseColor.rgb * (vec3(1.0) - f0);
 	diffuseColor *= 1.0 - metallic;
+		
+	float alphaRoughness = perceptualRoughness * perceptualRoughness;
+
 	vec3 specularColor = mix(f0, baseColor.rgb, metallic);
 
 	// Compute reflectance.
@@ -283,7 +336,7 @@ void main()
 
 	const float u_OcclusionStrength = 1.0f;
 	// Apply optional PBR terms for additional (optional) shading
-	if (material.hasEmissiveTexture == 1.0f) {
+	if (material.hasOcclusionTexture == 1.0f) {
 		float ao = texture(aoMap, inUV).r;
 		color = mix(color, color * ao, u_OcclusionStrength);
 	}
