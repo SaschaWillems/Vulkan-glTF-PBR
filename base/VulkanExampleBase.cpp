@@ -106,22 +106,6 @@ std::string VulkanExampleBase::getWindowTitle()
 	return windowTitle;
 }
 
-void VulkanExampleBase::createCommandBuffers()
-{
-	drawCmdBuffers.resize(swapChain.imageCount);
-	VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
-	cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	cmdBufAllocateInfo.commandPool = cmdPool;
-	cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	cmdBufAllocateInfo.commandBufferCount = static_cast<uint32_t>(drawCmdBuffers.size());
-	VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, drawCmdBuffers.data()));
-}
-
-void VulkanExampleBase::destroyCommandBuffers()
-{
-	vkFreeCommandBuffers(device, cmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
-}
-
 void VulkanExampleBase::prepare()
 {
 	/*
@@ -131,21 +115,6 @@ void VulkanExampleBase::prepare()
 	setupSwapChain();
 
 	/*
-		Synchronization primitives
-	*/
-	VkSemaphoreCreateInfo semaphoreCI{};
-	semaphoreCI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCI, nullptr, &presentCompleteSemaphore));
-	VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCI, nullptr, &renderCompleteSemaphore));
-	VkFenceCreateInfo fenceCreateInfo = {};
-	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-	waitFences.resize(swapChain.imageCount);
-	for (auto& fence : waitFences) {
-		VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
-	}
-
-	/*
 		Command pool
 	*/
 	VkCommandPoolCreateInfo cmdPoolInfo = {};
@@ -153,12 +122,6 @@ void VulkanExampleBase::prepare()
 	cmdPoolInfo.queueFamilyIndex = swapChain.queueNodeIndex;
 	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	VK_CHECK_RESULT(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &cmdPool));
-
-	/*
-		Command buffers
-	*/
-
-	createCommandBuffers();
 
 	/*
 		Render pass
@@ -590,21 +553,6 @@ void VulkanExampleBase::renderLoop()
 	vkDeviceWaitIdle(device);
 }
 
-void VulkanExampleBase::prepareFrame()
-{
-	VkResult err = swapChain.acquireNextImage(presentCompleteSemaphore, &currentBuffer);
-	if ((err == VK_ERROR_OUT_OF_DATE_KHR) || (err == VK_SUBOPTIMAL_KHR)) {
-		windowResize();
-	} else {
-		VK_CHECK_RESULT(err);
-	}
-}
-
-void VulkanExampleBase::submitFrame()
-{
-	VK_CHECK_RESULT(swapChain.queuePresent(queue, currentBuffer, renderCompleteSemaphore));
-}
-
 VulkanExampleBase::VulkanExampleBase()
 {
 	char* numConvPtr;
@@ -657,7 +605,6 @@ VulkanExampleBase::~VulkanExampleBase()
 	// Clean up Vulkan resources
 	swapChain.cleanup();
 	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-	destroyCommandBuffers();
 	vkDestroyRenderPass(device, renderPass, nullptr);
 	for (uint32_t i = 0; i < frameBuffers.size(); i++) {
 		vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
@@ -667,11 +614,6 @@ VulkanExampleBase::~VulkanExampleBase()
 	vkFreeMemory(device, depthStencil.mem, nullptr);
 	vkDestroyPipelineCache(device, pipelineCache, nullptr);
 	vkDestroyCommandPool(device, cmdPool, nullptr);
-	vkDestroySemaphore(device, presentCompleteSemaphore, nullptr);
-	vkDestroySemaphore(device, renderCompleteSemaphore, nullptr);
-	for (auto& fence : waitFences) {
-		vkDestroyFence(device, fence, nullptr);
-	}
 	if (settings.multiSampling) {
 		vkDestroyImage(device, multisampleTarget.color.image, nullptr);
 		vkDestroyImageView(device, multisampleTarget.color.view, nullptr);
@@ -1893,8 +1835,6 @@ void VulkanExampleBase::windowResize()
 		vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
 	}
 	setupFrameBuffer();
-	destroyCommandBuffers();
-	createCommandBuffers();
 	buildCommandBuffers();
 	vkDeviceWaitIdle(device);
 

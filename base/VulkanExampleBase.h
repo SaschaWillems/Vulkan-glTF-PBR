@@ -60,7 +60,6 @@ private:
 	uint32_t destWidth;
 	uint32_t destHeight;
 	bool resizing = false;
-	void windowResize();
 	void handleMouseMove(int32_t x, int32_t y);
 	PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallback;
 	PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallback;
@@ -88,18 +87,15 @@ protected:
 	VkQueue queue;
 	VkFormat depthFormat;
 	VkCommandPool cmdPool;
-	std::vector<VkCommandBuffer> drawCmdBuffers;
 	VkRenderPass renderPass;
 	std::vector<VkFramebuffer>frameBuffers;
 	uint32_t currentBuffer = 0;
 	VkDescriptorPool descriptorPool;
 	VkPipelineCache pipelineCache;
 	VulkanSwapChain swapChain;
-	VkSemaphore presentCompleteSemaphore;
-	VkSemaphore renderCompleteSemaphore;
-	std::vector<VkFence> waitFences;
 	std::string title = "Vulkan Example";
 	std::string name = "vulkanExample";
+	void windowResize();
 public: 
 	static std::vector<const char*> args;
 	bool prepared = false;
@@ -244,11 +240,7 @@ public:
 
 	void initSwapchain();
 	void setupSwapChain();
-	void createCommandBuffers();
-	void destroyCommandBuffers();
 
 	void renderLoop();
 	void renderFrame();
-	void prepareFrame();
-	void submitFrame();
 };

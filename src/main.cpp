@@ -1,7 +1,5 @@
 /*
-* Vulkan Example - Physical based rendering a glTF 2.0 model with image based lighting
-*
-* Note: Requires the separate asset pack (see data/README.md)
+* Vulkan physical based rendering glTF 2.0 demo
 *
 * Copyright (C) 2018 by Sascha Willems - www.saschawillems.de
 *
@@ -116,7 +114,7 @@ public:
 		Buffer scene;
 		Buffer skybox;
 		Buffer params;
-	} uniformBuffers;
+	};
 
 	struct UBOMatrices {
 		glm::mat4 projection;
@@ -124,7 +122,7 @@ public:
 		glm::mat4 view;
 		glm::vec3 camPos;
 		float flipUV = 0.0f;
-	} uboMatrices;
+	} shaderValuesScene, shaderValuesSkybox;
 
 	struct UBOParams {
 		glm::vec4 lightDir;
@@ -150,7 +148,18 @@ public:
 	struct DescriptorSets {
 		VkDescriptorSet scene;
 		VkDescriptorSet skybox;
-	} descriptorSets;
+	};
+	std::vector<DescriptorSets> descriptorSets;
+
+	std::vector<VkCommandBuffer> commandBuffers;
+	std::vector<UniformBuffers> uniformBuffers;
+
+	std::vector<VkFence> waitFences;
+	std::vector<VkSemaphore> renderCompleteSemaphores;
+	std::vector<VkSemaphore> presentCompleteSemaphores;
+
+	const uint32_t renderAhead = 2;
+	uint32_t frameIndex = 0;
 
 	uint32_t animationIndex = 0;
 	float animationTimer = 0.0f;
@@ -212,12 +221,23 @@ public:
 		models.scene.destroy(device);
 		models.skybox.destroy(device);
 
-		vkDestroyBuffer(device, uniformBuffers.scene.buffer, nullptr);
-		vkFreeMemory(device, uniformBuffers.scene.memory, nullptr);
-		vkDestroyBuffer(device, uniformBuffers.skybox.buffer, nullptr);
-		vkFreeMemory(device, uniformBuffers.skybox.memory, nullptr);
-		vkDestroyBuffer(device, uniformBuffers.params.buffer, nullptr);
-		vkFreeMemory(device, uniformBuffers.params.memory, nullptr);
+		for (auto buffer : uniformBuffers) {
+			vkDestroyBuffer(device, buffer.scene.buffer, nullptr);
+			vkFreeMemory(device, buffer.scene.memory, nullptr);
+			vkDestroyBuffer(device, buffer.skybox.buffer, nullptr);
+			vkFreeMemory(device, buffer.skybox.memory, nullptr);
+			vkDestroyBuffer(device, buffer.params.buffer, nullptr);
+			vkFreeMemory(device, buffer.params.memory, nullptr);
+		}
+		for (auto fence : waitFences) {
+			vkDestroyFence(device, fence, nullptr);
+		}
+		for (auto semaphore : renderCompleteSemaphores) {
+			vkDestroySemaphore(device, semaphore, nullptr);
+		}
+		for (auto semaphore : presentCompleteSemaphores) {
+			vkDestroySemaphore(device, semaphore, nullptr);
+		}
 
 		textures.environmentCube.destroy();
 		textures.irradianceCube.destroy();
@@ -226,18 +246,18 @@ public:
 		textures.empty.destroy();
 	}
 
-	void renderNode(vkglTF::Node *node, VkCommandBuffer commandBuffer, vkglTF::Material::AlphaMode alphaMode) {
+	void renderNode(vkglTF::Node *node, uint32_t cbIndex, vkglTF::Material::AlphaMode alphaMode) {
 		if (node->mesh) {
 			// Render mesh primitives
 			for (vkglTF::Primitive * primitive : node->mesh->primitives) {
 				if (primitive->material.alphaMode == alphaMode) {
 
 					const std::vector<VkDescriptorSet> descriptorsets = {
-						descriptorSets.scene,
+						descriptorSets[cbIndex].scene,
 						primitive->material.descriptorSet,
 						node->mesh->uniformBuffer.descriptorSet,
 					};
-					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
+					vkCmdBindDescriptorSets(commandBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
 
 					// Pass material parameters as push constants
 					PushConstBlockMaterial pushConstBlockMaterial{};					
@@ -269,15 +289,15 @@ public:
 						pushConstBlockMaterial.specularFactor = glm::vec4(primitive->material.extension.specularFactor, 1.0f);
 					}
 
-					vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
+					vkCmdPushConstants(commandBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
 
-					vkCmdDrawIndexed(commandBuffer, primitive->indexCount, 1, primitive->firstIndex, 0, 0);
+					vkCmdDrawIndexed(commandBuffers[cbIndex], primitive->indexCount, 1, primitive->firstIndex, 0, 0);
 				}
 			}
 
 		};
 		for (auto child : node->children) {
-			renderNode(child, commandBuffer, alphaMode);
+			renderNode(child, cbIndex, alphaMode);
 		}
 	}
 
@@ -307,52 +327,54 @@ public:
 		renderPassBeginInfo.clearValueCount = settings.multiSampling ? 3 : 2;
 		renderPassBeginInfo.pClearValues = clearValues;
 
-		for (size_t i = 0; i < drawCmdBuffers.size(); ++i) {
+		for (size_t i = 0; i < commandBuffers.size(); ++i) {
 			renderPassBeginInfo.framebuffer = frameBuffers[i];
 
-			VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufferBeginInfo));
-			vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			VkCommandBuffer currentCB = commandBuffers[i];
+
+			VK_CHECK_RESULT(vkBeginCommandBuffer(currentCB, &cmdBufferBeginInfo));
+			vkCmdBeginRenderPass(currentCB, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 			VkViewport viewport{};
 			viewport.width = (float)width;
 			viewport.height = (float)height;
 			viewport.minDepth = 0.0f;
 			viewport.maxDepth = 1.0f;
-			vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
+			vkCmdSetViewport(currentCB, 0, 1, &viewport);
 
 			VkRect2D scissor{};
 			scissor.extent = { width, height };
-			vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+			vkCmdSetScissor(currentCB, 0, 1, &scissor);
 
 			VkDeviceSize offsets[1] = { 0 };
 
-			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.skybox, 0, NULL);
-			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
-			models.skybox.draw(drawCmdBuffers[i]);
+			vkCmdBindDescriptorSets(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i].skybox, 0, nullptr);
+			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
+			models.skybox.draw(currentCB);
 
-			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
+			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
 
 			vkglTF::Model &model = models.scene;
 
-			vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &model.vertices.buffer, offsets);
-			vkCmdBindIndexBuffer(drawCmdBuffers[i], model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindVertexBuffers(currentCB, 0, 1, &model.vertices.buffer, offsets);
+			vkCmdBindIndexBuffer(currentCB, model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 			// Opaque primitives first
 			for (auto node : model.nodes) {
-				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_OPAQUE);
+				renderNode(node, i, vkglTF::Material::ALPHAMODE_OPAQUE);
 			}
 			// Transparent last
 			// TODO: Correct depth sorting
-			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrAlphaBlend);
+			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrAlphaBlend);
 			for (auto node : model.nodes) {
-				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_MASK);
+				renderNode(node, i, vkglTF::Material::ALPHAMODE_MASK);
 			}
 			for (auto node : model.nodes) {
-				renderNode(node, drawCmdBuffers[i], vkglTF::Material::ALPHAMODE_BLEND);
+				renderNode(node, i, vkglTF::Material::ALPHAMODE_BLEND);
 			}
 
-			vkCmdEndRenderPass(drawCmdBuffers[i]);
-			VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
+			vkCmdEndRenderPass(currentCB);
+			VK_CHECK_RESULT(vkEndCommandBuffer(currentCB));
 		}
 	}
 
@@ -376,13 +398,13 @@ public:
 
 		std::string sceneFile = assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf";
 		std::string envMapFile = assetpath + "textures/papermill_hdr16f_cube.ktx";
-		uboMatrices.flipUV = 1.0f;
+		shaderValuesScene.flipUV = 1.0f;
 		for (size_t i = 0; i < args.size(); i++) {
 			if (std::string(args[i]).find(".gltf") != std::string::npos) {
 				std::ifstream file(args[i]);
 				if (file.good()) {
 					sceneFile = args[i];
-					uboMatrices.flipUV = 0.0f;
+					shaderValuesScene.flipUV = 0.0f;
 				} else {
 					std::cout << "could not load \"" << args[i] << "\"" << std::endl;
 				}
@@ -458,14 +480,14 @@ public:
 		}
 
 		std::vector<VkDescriptorPoolSize> poolSizes = {
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4 + meshCount },
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount }
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, (4 + meshCount) * swapChain.imageCount },
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount * swapChain.imageCount }
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		descriptorPoolCI.poolSizeCount = 2;
 		descriptorPoolCI.pPoolSizes = poolSizes.data();
-		descriptorPoolCI.maxSets = 2 + materialCount + meshCount;
+		descriptorPoolCI.maxSets = (2 + materialCount + meshCount) * swapChain.imageCount;
 		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool));
 
 		/*
@@ -487,51 +509,54 @@ public:
 			descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
 			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.scene));
 
-			VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
-			descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			descriptorSetAllocInfo.descriptorPool = descriptorPool;
-			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.scene;
-			descriptorSetAllocInfo.descriptorSetCount = 1;
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.scene));
+			for (auto i = 0; i < descriptorSets.size(); i++) {
 
-			std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};
+				VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+				descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				descriptorSetAllocInfo.descriptorPool = descriptorPool;
+				descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.scene;
+				descriptorSetAllocInfo.descriptorSetCount = 1;
+				VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets[i].scene));
 
-			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			writeDescriptorSets[0].descriptorCount = 1;
-			writeDescriptorSets[0].dstSet = descriptorSets.scene;
-			writeDescriptorSets[0].dstBinding = 0;
-			writeDescriptorSets[0].pBufferInfo = &uniformBuffers.scene.descriptor;
+				std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};
 
-			writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			writeDescriptorSets[1].descriptorCount = 1;
-			writeDescriptorSets[1].dstSet = descriptorSets.scene;
-			writeDescriptorSets[1].dstBinding = 1;
-			writeDescriptorSets[1].pBufferInfo = &uniformBuffers.params.descriptor;
+				writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				writeDescriptorSets[0].descriptorCount = 1;
+				writeDescriptorSets[0].dstSet = descriptorSets[i].scene;
+				writeDescriptorSets[0].dstBinding = 0;
+				writeDescriptorSets[0].pBufferInfo = &uniformBuffers[i].scene.descriptor;
 
-			writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			writeDescriptorSets[2].descriptorCount = 1;
-			writeDescriptorSets[2].dstSet = descriptorSets.scene;
-			writeDescriptorSets[2].dstBinding = 2;
-			writeDescriptorSets[2].pImageInfo = &textures.irradianceCube.descriptor;
+				writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				writeDescriptorSets[1].descriptorCount = 1;
+				writeDescriptorSets[1].dstSet = descriptorSets[i].scene;
+				writeDescriptorSets[1].dstBinding = 1;
+				writeDescriptorSets[1].pBufferInfo = &uniformBuffers[i].params.descriptor;
 
-			writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			writeDescriptorSets[3].descriptorCount = 1;
-			writeDescriptorSets[3].dstSet = descriptorSets.scene;
-			writeDescriptorSets[3].dstBinding = 3;
-			writeDescriptorSets[3].pImageInfo = &textures.prefilteredCube.descriptor;
+				writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writeDescriptorSets[2].descriptorCount = 1;
+				writeDescriptorSets[2].dstSet = descriptorSets[i].scene;
+				writeDescriptorSets[2].dstBinding = 2;
+				writeDescriptorSets[2].pImageInfo = &textures.irradianceCube.descriptor;
 
-			writeDescriptorSets[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSets[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			writeDescriptorSets[4].descriptorCount = 1;
-			writeDescriptorSets[4].dstSet = descriptorSets.scene;
-			writeDescriptorSets[4].dstBinding = 4;
-			writeDescriptorSets[4].pImageInfo = &textures.lutBrdf.descriptor;
+				writeDescriptorSets[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSets[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writeDescriptorSets[3].descriptorCount = 1;
+				writeDescriptorSets[3].dstSet = descriptorSets[i].scene;
+				writeDescriptorSets[3].dstBinding = 3;
+				writeDescriptorSets[3].pImageInfo = &textures.prefilteredCube.descriptor;
 
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
+				writeDescriptorSets[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSets[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writeDescriptorSets[4].descriptorCount = 1;
+				writeDescriptorSets[4].dstSet = descriptorSets[i].scene;
+				writeDescriptorSets[4].dstBinding = 4;
+				writeDescriptorSets[4].pImageInfo = &textures.lutBrdf.descriptor;
+
+				vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
+			}
 		}
 
 		// Material (samplers)
@@ -619,38 +644,38 @@ public:
 		}
 
 		// Skybox (fixed set)
-		{
+		for (auto i = 0; i < uniformBuffers.size(); i++) {
 			VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
 			descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 			descriptorSetAllocInfo.descriptorPool = descriptorPool;
 			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.scene;
 			descriptorSetAllocInfo.descriptorSetCount = 1;
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.skybox));
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets[i].skybox));
 
 			std::array<VkWriteDescriptorSet, 3> writeDescriptorSets{};
 
 			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			writeDescriptorSets[0].descriptorCount = 1;
-			writeDescriptorSets[0].dstSet = descriptorSets.skybox;
+			writeDescriptorSets[0].dstSet = descriptorSets[i].skybox;
 			writeDescriptorSets[0].dstBinding = 0;
-			writeDescriptorSets[0].pBufferInfo = &uniformBuffers.skybox.descriptor;
+			writeDescriptorSets[0].pBufferInfo = &uniformBuffers[i].skybox.descriptor;
 
 			writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			writeDescriptorSets[1].descriptorCount = 1;
-			writeDescriptorSets[1].dstSet = descriptorSets.skybox;
+			writeDescriptorSets[1].dstSet = descriptorSets[i].skybox;
 			writeDescriptorSets[1].dstBinding = 1;
-			writeDescriptorSets[1].pBufferInfo = &uniformBuffers.params.descriptor;
+			writeDescriptorSets[1].pBufferInfo = &uniformBuffers[i].params.descriptor;
 
 			writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			writeDescriptorSets[2].descriptorCount = 1;
-			writeDescriptorSets[2].dstSet = descriptorSets.skybox;
+			writeDescriptorSets[2].dstSet = descriptorSets[i].skybox;
 			writeDescriptorSets[2].dstBinding = 2;
 			writeDescriptorSets[2].pImageInfo = &textures.prefilteredCube.descriptor;
 
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
+			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
 		}
 	}
 
@@ -1610,72 +1635,72 @@ public:
 	}
 
 	/* 
-		Prepare and initialize uniform buffer containing shader uniforms
+		Prepare and initialize uniform buffers containing shader parameters
 	*/
 	void prepareUniformBuffers()
 	{
-		// Objact vertex shader uniform buffer
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			sizeof(uboMatrices),
-			&uniformBuffers.scene.buffer,
-			&uniformBuffers.scene.memory));
+		for (auto &uniformBuffer : uniformBuffers) {
+			// Object vertex shader uniform buffer
+			VK_CHECK_RESULT(vulkanDevice->createBuffer(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				sizeof(shaderValuesScene),
+				&uniformBuffer.scene.buffer,
+				&uniformBuffer.scene.memory));
 
-		// Skybox vertex shader uniform buffer
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			sizeof(uboMatrices),
-			&uniformBuffers.skybox.buffer,
-			&uniformBuffers.skybox.memory));
+			// Skybox vertex shader uniform buffer
+			VK_CHECK_RESULT(vulkanDevice->createBuffer(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				sizeof(shaderValuesSkybox),
+				&uniformBuffer.skybox.buffer,
+				&uniformBuffer.skybox.memory));
 
-		// Shared parameter uniform buffer
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			sizeof(uboParams),
-			&uniformBuffers.params.buffer,
-			&uniformBuffers.params.memory));
+			// Shared parameter uniform buffer
+			VK_CHECK_RESULT(vulkanDevice->createBuffer(
+				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				sizeof(uboParams),
+				&uniformBuffer.params.buffer,
+				&uniformBuffer.params.memory));
 
-		// Descriptors
-		uniformBuffers.scene.descriptor = { uniformBuffers.scene.buffer, 0, sizeof(uboMatrices) };
-		uniformBuffers.skybox.descriptor = { uniformBuffers.skybox.buffer, 0, sizeof(uboMatrices) };
-		uniformBuffers.params.descriptor = { uniformBuffers.params.buffer, 0, sizeof(uboParams) };
+			// Descriptors
+			uniformBuffer.scene.descriptor = { uniformBuffer.scene.buffer, 0, sizeof(shaderValuesScene) };
+			uniformBuffer.skybox.descriptor = { uniformBuffer.skybox.buffer, 0, sizeof(shaderValuesSkybox) };
+			uniformBuffer.params.descriptor = { uniformBuffer.params.buffer, 0, sizeof(uboParams) };
 
-		// Map persistent
-		VK_CHECK_RESULT(vkMapMemory(device, uniformBuffers.scene.memory, 0, sizeof(uboMatrices), 0, &uniformBuffers.scene.mapped));
-		VK_CHECK_RESULT(vkMapMemory(device, uniformBuffers.skybox.memory, 0, sizeof(uboMatrices), 0, &uniformBuffers.skybox.mapped));
-		VK_CHECK_RESULT(vkMapMemory(device, uniformBuffers.params.memory, 0, sizeof(uboParams), 0, &uniformBuffers.params.mapped));
+			// Map persistent
+			VK_CHECK_RESULT(vkMapMemory(device, uniformBuffer.scene.memory, 0, sizeof(shaderValuesScene), 0, &uniformBuffer.scene.mapped));
+			VK_CHECK_RESULT(vkMapMemory(device, uniformBuffer.skybox.memory, 0, sizeof(shaderValuesSkybox), 0, &uniformBuffer.skybox.mapped));
+			VK_CHECK_RESULT(vkMapMemory(device, uniformBuffer.params.memory, 0, sizeof(uboParams), 0, &uniformBuffer.params.mapped));
+		}
 
 		updateUniformBuffers();
-		updateParams();
 	}
 
 	void updateUniformBuffers()
 	{
 		// Scene
-		uboMatrices.projection = camera.matrices.perspective;
+		shaderValuesScene.projection = camera.matrices.perspective;
 
-		uboMatrices.view = camera.matrices.view;
+		shaderValuesScene.view = camera.matrices.view;
+		
+		shaderValuesScene.model = glm::translate(glm::mat4(1.0f), modelPos);
+		shaderValuesScene.model = glm::rotate(shaderValuesScene.model, glm::radians(modelrot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+		shaderValuesScene.model = glm::rotate(shaderValuesScene.model, glm::radians(modelrot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+		shaderValuesScene.model = glm::rotate(shaderValuesScene.model, glm::radians(modelrot.z), glm::vec3(0.0f, 0.0f, 1.0f));
+		shaderValuesScene.model = glm::scale(shaderValuesScene.model, glm::vec3(scale));
 
-		uboMatrices.model = glm::translate(glm::mat4(1.0f), modelPos);
-		uboMatrices.model = glm::rotate(uboMatrices.model, glm::radians(modelrot.x), glm::vec3(1.0f, 0.0f, 0.0f));
-		uboMatrices.model = glm::rotate(uboMatrices.model, glm::radians(modelrot.y), glm::vec3(0.0f, 1.0f, 0.0f));
-		uboMatrices.model = glm::rotate(uboMatrices.model, glm::radians(modelrot.z), glm::vec3(0.0f, 0.0f, 1.0f));
-		uboMatrices.model = glm::scale(uboMatrices.model, glm::vec3(scale));
-
-		uboMatrices.camPos = glm::vec3(
+		shaderValuesScene.camPos = glm::vec3(
 			-camera.position.z * sin(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x)),
 			-camera.position.z * sin(glm::radians(camera.rotation.x)),
-			camera.position.z * cos(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x))
+			 camera.position.z * cos(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x))
 		);
 
-		memcpy(uniformBuffers.scene.mapped, &uboMatrices, sizeof(uboMatrices));
-
 		// Skybox
-		uboMatrices.model = glm::mat4(glm::mat3(camera.matrices.view));
-		memcpy(uniformBuffers.skybox.mapped, &uboMatrices, sizeof(uboMatrices));
+		shaderValuesSkybox.projection = camera.matrices.perspective;
+		shaderValuesSkybox.view = camera.matrices.view;
+		shaderValuesSkybox.model = glm::mat4(glm::mat3(camera.matrices.view));
 	}
 
 	void updateParams()
@@ -1685,12 +1710,41 @@ public:
 			sin(glm::radians(lightSource.rotation.y)),
 			cos(glm::radians(lightSource.rotation.x)) * cos(glm::radians(lightSource.rotation.y)),
 			0.0f);
-		memcpy(uniformBuffers.params.mapped, &uboParams, sizeof(uboParams));
 	}
 
 	void prepare()
 	{
 		VulkanExampleBase::prepare();
+		
+		waitFences.resize(renderAhead);
+		presentCompleteSemaphores.resize(renderAhead);
+		renderCompleteSemaphores.resize(renderAhead);
+		commandBuffers.resize(swapChain.imageCount);
+		uniformBuffers.resize(swapChain.imageCount);
+		descriptorSets.resize(swapChain.imageCount);
+		// Command buffer execution fences
+		for (auto &waitFence : waitFences) {
+			VkFenceCreateInfo fenceCI{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, VK_FENCE_CREATE_SIGNALED_BIT };
+			VK_CHECK_RESULT(vkCreateFence(device, &fenceCI, nullptr, &waitFence));
+		}
+		// Queue ordering semaphores
+		for (auto &semaphore : presentCompleteSemaphores) {
+			VkSemaphoreCreateInfo semaphoreCI{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, nullptr, 0 };
+			VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCI, nullptr, &semaphore));
+		}
+		for (auto &semaphore : renderCompleteSemaphores) {
+			VkSemaphoreCreateInfo semaphoreCI{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, nullptr, 0 };
+			VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCI, nullptr, &semaphore));
+		}
+		// Command buffers
+		{
+			VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
+			cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			cmdBufAllocateInfo.commandPool = cmdPool;
+			cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			cmdBufAllocateInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+			VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, commandBuffers.data()));
+		}
 
 		loadAssets();
 		generateBRDFLUT();
@@ -1708,21 +1762,51 @@ public:
 		if (!prepared) {
 			return;
 		}
-		VulkanExampleBase::prepareFrame();
-		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
-		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentBuffer]));
+
+		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[frameIndex], VK_TRUE, UINT64_MAX));
+		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[frameIndex]));
+
+		VkResult acquire = swapChain.acquireNextImage(presentCompleteSemaphores[frameIndex], &currentBuffer);
+		if ((acquire == VK_ERROR_OUT_OF_DATE_KHR) || (acquire == VK_SUBOPTIMAL_KHR)) {
+			windowResize();
+		}
+		else {
+			VK_CHECK_RESULT(acquire);
+		}
+
+		// Update UBOs
+		updateUniformBuffers();
+		UniformBuffers currentUB = uniformBuffers[currentBuffer];
+		memcpy(currentUB.scene.mapped, &shaderValuesScene, sizeof(shaderValuesScene));
+		memcpy(currentUB.params.mapped, &uboParams, sizeof(uboParams));
+		memcpy(currentUB.skybox.mapped, &shaderValuesSkybox, sizeof(shaderValuesSkybox));
+
 		const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.pWaitDstStageMask = &waitDstStageMask;
+		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[frameIndex];
 		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pWaitSemaphores = &presentCompleteSemaphore;
+		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[frameIndex];
 		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &renderCompleteSemaphore;
+		submitInfo.pCommandBuffers = &commandBuffers[currentBuffer];
 		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer];
-		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentBuffer]));
-		VulkanExampleBase::submitFrame();
+		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[frameIndex]));
+
+		VkResult present = swapChain.queuePresent(queue, currentBuffer, renderCompleteSemaphores[frameIndex]);
+		if (!((present == VK_SUCCESS) || (present == VK_SUBOPTIMAL_KHR))) {
+			if (present == VK_ERROR_OUT_OF_DATE_KHR) {
+				windowResize();
+				return;
+			}
+			else {
+				VK_CHECK_RESULT(present);
+			}
+		}
+
+		frameIndex += 1;
+		frameIndex %= renderAhead;
+
 		if (!paused) {
 			if (rotateModel) {
 				modelrot.y += frameTimer * 35.0f;
