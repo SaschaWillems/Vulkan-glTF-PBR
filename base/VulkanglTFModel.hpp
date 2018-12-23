@@ -539,6 +539,7 @@ namespace vkglTF
 		std::vector<Texture> textures;
 		std::vector<Material> materials;
 		std::vector<Animation> animations;
+		std::vector<std::string> extensions;
 
 		struct Dimensions {
 			glm::vec3 min = glm::vec3(FLT_MAX);
@@ -995,6 +996,8 @@ namespace vkglTF
 				std::cerr << "Could not load gltf file: " << error << std::endl;
 				return;
 			}
+
+			extensions = gltfModel.extensionsUsed;
 
 			size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
 			size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
