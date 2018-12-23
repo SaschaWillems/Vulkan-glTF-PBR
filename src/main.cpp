@@ -20,6 +20,7 @@
 #include "VulkanExampleBase.h"
 #include "VulkanTexture.hpp"
 #include "VulkanglTFModel.hpp"
+#include "VulkanUtils.hpp"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -29,60 +30,6 @@
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #include "tiny_gltf.h"
-
-/*
-	Utility functions
-*/
-VkPipelineShaderStageCreateInfo loadShader(VkDevice device, std::string filename, VkShaderStageFlagBits stage)
-{
-	VkPipelineShaderStageCreateInfo shaderStage{};
-	shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shaderStage.stage = stage;
-	shaderStage.pName = "main";
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-	std::string assetpath = "shaders/" + filename;
-	AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, assetpath.c_str(), AASSET_MODE_STREAMING);
-	assert(asset);
-	size_t size = AAsset_getLength(asset);
-	assert(size > 0);
-	char *shaderCode = new char[size];
-	AAsset_read(asset, shaderCode, size);
-	AAsset_close(asset);
-	VkShaderModule shaderModule;
-	VkShaderModuleCreateInfo moduleCreateInfo;
-	moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	moduleCreateInfo.pNext = NULL;
-	moduleCreateInfo.codeSize = size;
-	moduleCreateInfo.pCode = (uint32_t*)shaderCode;
-	moduleCreateInfo.flags = 0;
-	VK_CHECK_RESULT(vkCreateShaderModule(device, &moduleCreateInfo, NULL, &shaderStage.module));
-	delete[] shaderCode;
-#else
-	std::ifstream is("./../data/shaders/" + filename, std::ios::binary | std::ios::in | std::ios::ate);
-
-	if (is.is_open()) {
-		size_t size = is.tellg();
-		is.seekg(0, std::ios::beg);
-		char* shaderCode = new char[size];
-		is.read(shaderCode, size);
-		is.close();
-		assert(size > 0);
-		VkShaderModuleCreateInfo moduleCreateInfo{};
-		moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		moduleCreateInfo.codeSize = size;
-		moduleCreateInfo.pCode = (uint32_t*)shaderCode;
-		vkCreateShaderModule(device, &moduleCreateInfo, NULL, &shaderStage.module);
-		delete[] shaderCode;
-	}
-	else {
-		std::cerr << "Error: Could not open shader file \"" << filename << "\"" << std::endl;
-		shaderStage.module = VK_NULL_HANDLE;
-	}
-
-#endif
-	assert(shaderStage.module != VK_NULL_HANDLE);
-	return shaderStage;
-}
 
 /*
 	PBR example main class
@@ -103,14 +50,7 @@ public:
 		vkglTF::Model skybox;
 	} models;
 
-	struct Buffer {
-		VkBuffer buffer;
-		VkDeviceMemory memory;
-		VkDescriptorBufferInfo descriptor;
-		void *mapped;
-	};
-
-	struct UniformBuffers {
+	struct UniformBufferSet {
 		Buffer scene;
 		Buffer skybox;
 		Buffer params;
@@ -129,7 +69,7 @@ public:
 		float exposure = 4.5f;
 		float gamma = 2.2f;
 		float prefilteredCubeMipLevels;
-	} uboParams;
+	} shaderValuesParams;
 
 	VkPipelineLayout pipelineLayout;
 
@@ -152,7 +92,7 @@ public:
 	std::vector<DescriptorSets> descriptorSets;
 
 	std::vector<VkCommandBuffer> commandBuffers;
-	std::vector<UniformBuffers> uniformBuffers;
+	std::vector<UniformBufferSet> uniformBuffers;
 
 	std::vector<VkFence> waitFences;
 	std::vector<VkSemaphore> renderCompleteSemaphores;
@@ -222,12 +162,9 @@ public:
 		models.skybox.destroy(device);
 
 		for (auto buffer : uniformBuffers) {
-			vkDestroyBuffer(device, buffer.scene.buffer, nullptr);
-			vkFreeMemory(device, buffer.scene.memory, nullptr);
-			vkDestroyBuffer(device, buffer.skybox.buffer, nullptr);
-			vkFreeMemory(device, buffer.skybox.memory, nullptr);
-			vkDestroyBuffer(device, buffer.params.buffer, nullptr);
-			vkFreeMemory(device, buffer.params.memory, nullptr);
+			buffer.params.destroy();
+			buffer.scene.destroy();
+			buffer.skybox.destroy();
 		}
 		for (auto fence : waitFences) {
 			vkDestroyFence(device, fence, nullptr);
@@ -1624,7 +1561,7 @@ public:
 					break;
 				case PREFILTEREDENV:
 					textures.prefilteredCube = cubemap;
-					uboParams.prefilteredCubeMipLevels = static_cast<float>(numMips);
+					shaderValuesParams.prefilteredCubeMipLevels = static_cast<float>(numMips);
 					break;
 			};
 
@@ -1640,41 +1577,10 @@ public:
 	void prepareUniformBuffers()
 	{
 		for (auto &uniformBuffer : uniformBuffers) {
-			// Object vertex shader uniform buffer
-			VK_CHECK_RESULT(vulkanDevice->createBuffer(
-				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				sizeof(shaderValuesScene),
-				&uniformBuffer.scene.buffer,
-				&uniformBuffer.scene.memory));
-
-			// Skybox vertex shader uniform buffer
-			VK_CHECK_RESULT(vulkanDevice->createBuffer(
-				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				sizeof(shaderValuesSkybox),
-				&uniformBuffer.skybox.buffer,
-				&uniformBuffer.skybox.memory));
-
-			// Shared parameter uniform buffer
-			VK_CHECK_RESULT(vulkanDevice->createBuffer(
-				VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				sizeof(uboParams),
-				&uniformBuffer.params.buffer,
-				&uniformBuffer.params.memory));
-
-			// Descriptors
-			uniformBuffer.scene.descriptor = { uniformBuffer.scene.buffer, 0, sizeof(shaderValuesScene) };
-			uniformBuffer.skybox.descriptor = { uniformBuffer.skybox.buffer, 0, sizeof(shaderValuesSkybox) };
-			uniformBuffer.params.descriptor = { uniformBuffer.params.buffer, 0, sizeof(uboParams) };
-
-			// Map persistent
-			VK_CHECK_RESULT(vkMapMemory(device, uniformBuffer.scene.memory, 0, sizeof(shaderValuesScene), 0, &uniformBuffer.scene.mapped));
-			VK_CHECK_RESULT(vkMapMemory(device, uniformBuffer.skybox.memory, 0, sizeof(shaderValuesSkybox), 0, &uniformBuffer.skybox.mapped));
-			VK_CHECK_RESULT(vkMapMemory(device, uniformBuffer.params.memory, 0, sizeof(uboParams), 0, &uniformBuffer.params.mapped));
+			uniformBuffer.scene.create(vulkanDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(shaderValuesScene));
+			uniformBuffer.skybox.create(vulkanDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(shaderValuesSkybox));
+			uniformBuffer.params.create(vulkanDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(shaderValuesParams));
 		}
-
 		updateUniformBuffers();
 	}
 
@@ -1705,7 +1611,7 @@ public:
 
 	void updateParams()
 	{
-		uboParams.lightDir = glm::vec4(
+		shaderValuesParams.lightDir = glm::vec4(
 			sin(glm::radians(lightSource.rotation.x)) * cos(glm::radians(lightSource.rotation.y)),
 			sin(glm::radians(lightSource.rotation.y)),
 			cos(glm::radians(lightSource.rotation.x)) * cos(glm::radians(lightSource.rotation.y)),
@@ -1776,9 +1682,9 @@ public:
 
 		// Update UBOs
 		updateUniformBuffers();
-		UniformBuffers currentUB = uniformBuffers[currentBuffer];
+		UniformBufferSet currentUB = uniformBuffers[currentBuffer];
 		memcpy(currentUB.scene.mapped, &shaderValuesScene, sizeof(shaderValuesScene));
-		memcpy(currentUB.params.mapped, &uboParams, sizeof(uboParams));
+		memcpy(currentUB.params.mapped, &shaderValuesParams, sizeof(shaderValuesParams));
 		memcpy(currentUB.skybox.mapped, &shaderValuesSkybox, sizeof(shaderValuesSkybox));
 
 		const VkPipelineStageFlags waitDstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -1836,31 +1742,31 @@ public:
 	{
 		switch (key) {
 			case KEY_F1:
-				if (uboParams.exposure > 0.1f) {
-					uboParams.exposure -= 0.1f;
+				if (shaderValuesParams.exposure > 0.1f) {
+					shaderValuesParams.exposure -= 0.1f;
 					updateParams();
-					std::cout << "Exposure: " << uboParams.exposure << std::endl;
+					std::cout << "Exposure: " << shaderValuesParams.exposure << std::endl;
 				}
 				break;
 			case KEY_F2:
-				if (uboParams.exposure < 10.0f) {
-					uboParams.exposure += 0.1f;
+				if (shaderValuesParams.exposure < 10.0f) {
+					shaderValuesParams.exposure += 0.1f;
 					updateParams();
-					std::cout << "Exposure: " << uboParams.exposure << std::endl;
+					std::cout << "Exposure: " << shaderValuesParams.exposure << std::endl;
 				}
 				break;
 			case KEY_F3:
-				if (uboParams.gamma > 0.1f) {
-					uboParams.gamma -= 0.1f;
+				if (shaderValuesParams.gamma > 0.1f) {
+					shaderValuesParams.gamma -= 0.1f;
 					updateParams();
-					std::cout << "Gamma: " << uboParams.gamma << std::endl;
+					std::cout << "Gamma: " << shaderValuesParams.gamma << std::endl;
 				}
 				break;
 			case KEY_F4:
-				if (uboParams.gamma < 10.0f) {
-					uboParams.gamma += 0.1f;
+				if (shaderValuesParams.gamma < 10.0f) {
+					shaderValuesParams.gamma += 0.1f;
 					updateParams();
-					std::cout << "Gamma: " << uboParams.gamma << std::endl;
+					std::cout << "Gamma: " << shaderValuesParams.gamma << std::endl;
 				}
 				break;
 		}
