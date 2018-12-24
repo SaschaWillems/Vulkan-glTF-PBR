@@ -71,6 +71,8 @@ public:
 		float gamma = 2.2f;
 		float prefilteredCubeMipLevels;
 		float scaleIBLAmbient = 1.0f;
+		glm::vec4 scaleFGDSpec = glm::vec4(0.0f);
+		glm::vec4 scaleDiffBaseMR = glm::vec4(0.0f);
 	} shaderValuesParams;
 
 	VkPipelineLayout pipelineLayout;
@@ -1727,6 +1729,14 @@ public:
 		ImGui::NextColumn();
 
 		if (!ui->collapsed) {
+
+			bool metallicRoughnessWorkflow = true;
+			for (auto extension : models.scene.extensions) {
+				if (extension == "KHR_materials_pbrSpecularGlossiness") {
+					metallicRoughnessWorkflow = false;
+				}
+			}
+
 			ui->text("Vulkan glTF 2.0 PBR");
 			ImGui::Text("%.1d fps (%.2f ms)", lastFPS, (1000.0f / lastFPS));
 
@@ -1746,6 +1756,52 @@ public:
 				if (ui->slider("##ibl", &shaderValuesParams.scaleIBLAmbient, 0.0f, 1.0f)) {
 					updateShaderParams = true;
 				}
+			}
+
+			if (ui->header("Inputs")) {
+				if (ui->checkbox(metallicRoughnessWorkflow ? "Base Color" : "Diffuse", &shaderValuesParams.scaleDiffBaseMR[1])) {
+					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f, shaderValuesParams.scaleDiffBaseMR[1], 0.0f, 0.0f);
+					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f);
+					updateShaderParams = true;
+				};
+				if (ui->checkbox(metallicRoughnessWorkflow ? "Metallic" : "Specular", &shaderValuesParams.scaleDiffBaseMR[2])) {
+					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f, 0.0f, shaderValuesParams.scaleDiffBaseMR[2], 0.0f);
+					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f);
+					updateShaderParams = true;
+				};
+				if (ui->checkbox(metallicRoughnessWorkflow ? "Roughness" : "Glossiness", &shaderValuesParams.scaleDiffBaseMR[3])) {
+					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f, 0.0f, 0.0f, shaderValuesParams.scaleDiffBaseMR[3]);
+					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f);
+					updateShaderParams = true;
+				};
+			}
+
+			if (ui->header("PBR equation")) {
+				if (ui->checkbox("Diff(l,n)", &shaderValuesParams.scaleDiffBaseMR[0])) {
+					shaderValuesParams.scaleDiffBaseMR = glm::vec4(shaderValuesParams.scaleDiffBaseMR[0], 0.0f, 0.0f, 0.0f);
+					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f);
+					updateShaderParams = true;
+				};
+				if (ui->checkbox("F(l,h)", &shaderValuesParams.scaleFGDSpec[0])) {
+					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f);
+					shaderValuesParams.scaleFGDSpec = glm::vec4(shaderValuesParams.scaleFGDSpec[0], 0.0f, 0.0f, 0.0f);
+					updateShaderParams = true;
+				};
+				if (ui->checkbox("G(l,v,h)", &shaderValuesParams.scaleFGDSpec[1])) {
+					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f);
+					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f, shaderValuesParams.scaleFGDSpec[1], 0.0f, 0.0f);
+					updateShaderParams = true;
+				};
+				if (ui->checkbox("D(h)", &shaderValuesParams.scaleFGDSpec[2])) {
+					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f);
+					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f, 0.0f, shaderValuesParams.scaleFGDSpec[2], 0.0f);
+					updateShaderParams = true;
+				};
+				if (ui->checkbox("Specular ", &shaderValuesParams.scaleFGDSpec[3])) {
+					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f);
+					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f, 0.0f, 0.0f, shaderValuesParams.scaleFGDSpec[3]);
+					updateShaderParams = true;
+				};
 			}
 		}
 
