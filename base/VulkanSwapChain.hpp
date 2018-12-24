@@ -48,12 +48,11 @@ private:
 public:
 	VkFormat colorFormat;
 	VkColorSpaceKHR colorSpace;
-	/** @brief Handle to the current swap chain, required for recreation */
-	VkSwapchainKHR swapChain = VK_NULL_HANDLE;	
+	VkSwapchainKHR swapChain = VK_NULL_HANDLE;
 	uint32_t imageCount;
 	std::vector<VkImage> images;
 	std::vector<SwapChainBuffer> buffers;
-	/** @brief Queue family index of the detected graphics and presenting device queue */
+	VkExtent2D extent = {};
 	uint32_t queueNodeIndex = UINT32_MAX;
 
 	/** @brief Creates the platform specific surface abstraction of the native platform window used for presentation */	
@@ -283,19 +282,18 @@ public:
 		std::vector<VkPresentModeKHR> presentModes(presentModeCount);
 		VK_CHECK_RESULT(fpGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data()));
 
-		VkExtent2D swapchainExtent = {};
 		// If width (and height) equals the special value 0xFFFFFFFF, the size of the surface will be set by the swapchain
 		if (surfCaps.currentExtent.width == (uint32_t)-1)
 		{
 			// If the surface size is undefined, the size is set to
 			// the size of the images requested.
-			swapchainExtent.width = *width;
-			swapchainExtent.height = *height;
+			extent.width = *width;
+			extent.height = *height;
 		}
 		else
 		{
 			// If the surface size is defined, the swap chain size must match
-			swapchainExtent = surfCaps.currentExtent;
+			extent = surfCaps.currentExtent;
 			*width = surfCaps.currentExtent.width;
 			*height = surfCaps.currentExtent.height;
 		}
@@ -367,7 +365,7 @@ public:
 		swapchainCI.minImageCount = desiredNumberOfSwapchainImages;
 		swapchainCI.imageFormat = colorFormat;
 		swapchainCI.imageColorSpace = colorSpace;
-		swapchainCI.imageExtent = { swapchainExtent.width, swapchainExtent.height };
+		swapchainCI.imageExtent = { extent.width, extent.height };
 		swapchainCI.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		swapchainCI.preTransform = (VkSurfaceTransformFlagBitsKHR)preTransform;
 		swapchainCI.imageArrayLayers = 1;

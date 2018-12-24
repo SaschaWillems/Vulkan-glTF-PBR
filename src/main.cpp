@@ -153,14 +153,6 @@ public:
 	VulkanExample() : VulkanExampleBase()
 	{
 		title = "Vulkan glTF 2.0 PBR";
-		camera.type = Camera::CameraType::lookat;
-
-		camera.setPerspective(45.0f, (float)width / (float)height, 0.1f, 256.0f);
-		camera.rotationSpeed = 0.25f;
-		camera.movementSpeed = 0.1f;
-
-		camera.setPosition({ 0.0f, 0.0f, 2.5f });
-		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 	}
 
 	~VulkanExample()
@@ -1657,10 +1649,25 @@ public:
 			0.0f);
 	}
 
+	void windowResized()
+	{
+		vkDeviceWaitIdle(device);
+		updateUniformBuffers();
+		updateOverlay();
+	}
+
 	void prepare()
 	{
 		VulkanExampleBase::prepare();
-		
+
+        camera.type = Camera::CameraType::lookat;
+
+        camera.setPerspective(45.0f, (float)width / (float)height, 0.1f, 256.0f);
+        camera.rotationSpeed = 0.25f;
+        camera.movementSpeed = 0.1f;
+        camera.setPosition({ 0.0f, 0.0f, 2.5f });
+        camera.setRotation({ 0.0f, 0.0f, 0.0f });
+
 		waitFences.resize(renderAhead);
 		presentCompleteSemaphores.resize(renderAhead);
 		renderCompleteSemaphores.resize(renderAhead);

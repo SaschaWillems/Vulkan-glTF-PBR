@@ -114,6 +114,11 @@ void VulkanExampleBase::prepare()
 	initSwapchain();
 	setupSwapChain();
 
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+    width = swapChain.extent.width;
+    height = swapChain.extent.height;
+#endif
+
 	/*
 		Command pool
 	*/
@@ -309,7 +314,6 @@ void VulkanExampleBase::renderFrame()
 	if (viewUpdated)
 	{
 		viewUpdated = false;
-		viewChanged();
 	}
 
 	render();
@@ -412,7 +416,6 @@ void VulkanExampleBase::renderLoop()
 			}
 			if (touchTimer >= 1.0) {
 				camera.keys.up = true;
-				viewChanged();
 			}
 
 			// Check gamepad state
@@ -432,18 +435,10 @@ void VulkanExampleBase::renderLoop()
 					camera.rotate(glm::vec3(gamePadState.axisLeft.y * 0.5f, 0.0f, 0.0f));
 					updateView = true;
 				}
-				if (updateView)
-				{
-					viewChanged();
-				}
 			}
 			else
 			{
 				updateView = camera.updatePad(gamePadState.axisLeft, gamePadState.axisRight, frameTimer);
-				if (updateView)
-				{
-					viewChanged();
-				}
 			}
 		}
 	}
@@ -454,7 +449,6 @@ void VulkanExampleBase::renderLoop()
 		if (viewUpdated)
 		{
 			viewUpdated = false;
-			viewChanged();
 		}
 		render();
 		frameCounter++;
@@ -481,7 +475,6 @@ void VulkanExampleBase::renderLoop()
 		if (viewUpdated)
 		{
 			viewUpdated = false;
-			viewChanged();
 		}
 
 		while (wl_display_prepare_read(display) != 0)
@@ -518,7 +511,6 @@ void VulkanExampleBase::renderLoop()
 		if (viewUpdated)
 		{
 			viewUpdated = false;
-			viewChanged();
 		}
 		xcb_generic_event_t *event;
 		while ((event = xcb_poll_for_event(connection)))
@@ -1063,8 +1055,6 @@ int32_t VulkanExampleBase::handleAppInput(struct android_app* app, AInputEvent* 
 
 							vulkanExample->camera.rotate(glm::vec3(deltaX, 0.0f, 0.0f));
 							vulkanExample->camera.rotate(glm::vec3(0.0f, -deltaY, 0.0f));
-
-							vulkanExample->viewChanged();
 
 							vulkanExample->touchPos.x = eventX;
 							vulkanExample->touchPos.y = eventY;
@@ -1637,7 +1627,7 @@ void VulkanExampleBase::handleEvent(const xcb_generic_event_t *event)
 }
 #endif
 
-void VulkanExampleBase::viewChanged() {}
+void VulkanExampleBase::windowResized() {}
 
 void VulkanExampleBase::keyPressed(uint32_t) {}
 
@@ -1839,7 +1829,7 @@ void VulkanExampleBase::windowResize()
 	vkDeviceWaitIdle(device);
 
 	camera.updateAspectRatio((float)width / (float)height);
-	viewChanged();
+	windowResized();
 
 	prepared = true;
 }
