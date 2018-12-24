@@ -115,8 +115,8 @@ void VulkanExampleBase::prepare()
 	setupSwapChain();
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
-    width = swapChain.extent.width;
-    height = swapChain.extent.height;
+	width = swapChain.extent.width;
+	height = swapChain.extent.height;
 #endif
 
 	/*

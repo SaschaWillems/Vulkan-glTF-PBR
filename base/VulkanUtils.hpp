@@ -13,7 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <vector>
+#include <map>
 #include "vulkan/vulkan.h"
 #include "VulkanDevice.hpp"
 #if defined(__ANDROID__)
@@ -116,25 +116,44 @@ VkPipelineShaderStageCreateInfo loadShader(VkDevice device, std::string filename
 	return shaderStage;
 }
 
-void readDirectory(const std::string& directory, std::vector<std::string> &filelist)
+void readDirectory(const std::string& directory, const std::string &pattern, std::map<std::string, std::string> &filelist, bool recursive)
 {
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 	AAssetDir* assetDir = AAssetManager_openDir(androidApp->activity->assetManager, directory.c_str());
 	AAssetDir_rewind(assetDir);
 	const char* assetName;
-	while((assetName = AAssetDir_getNextFileName(assetDir)) != 0) {
+	while ((assetName = AAssetDir_getNextFileName(assetDir)) != 0) {
 		filelist.push_back(assetName);
 	}
 	AAssetDir_close(assetDir);
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
-	std::string pattern(directory + "/*.ktx");
+	std::string searchpattern(directory + "/" + pattern);
 	WIN32_FIND_DATA data;
 	HANDLE hFind;
-	if ((hFind = FindFirstFile(pattern.c_str(), &data)) != INVALID_HANDLE_VALUE) {
+	if ((hFind = FindFirstFile(searchpattern.c_str(), &data)) != INVALID_HANDLE_VALUE) {
 		do {
-			filelist.push_back(data.cFileName);
+			std::string filename(data.cFileName);
+			filename.erase(filename.find_last_of("."), std::string::npos);
+			filelist[filename] = directory + "/" + data.cFileName;
 		} while (FindNextFile(hFind, &data) != 0);
 		FindClose(hFind);
+	}
+	if (recursive) {
+		std::string dirpattern = directory + "/*";
+		if ((hFind = FindFirstFile(dirpattern.c_str(), &data)) != INVALID_HANDLE_VALUE) {
+			do {
+				if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+					char subdir[MAX_PATH];
+					strcpy(subdir, directory.c_str());
+					strcat(subdir, "/");
+					strcat(subdir, data.cFileName);
+					if ((strcmp(data.cFileName, ".") != 0) && (strcmp(data.cFileName, "..") != 0)) {
+						readDirectory(subdir, pattern, filelist, recursive);
+					}
+				}
+			} while (FindNextFile(hFind, &data) != 0);
+			FindClose(hFind);
+		}
 	}
 #endif
 }

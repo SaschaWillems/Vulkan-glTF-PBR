@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <vector>
 #include <chrono>
+#include <map>
 
 #include <vulkan/vulkan.h>
 #include "VulkanExampleBase.h"
@@ -147,8 +148,8 @@ public:
 		float alphaMaskCutoff;
 	} pushConstBlockMaterial;
 
-	std::vector<std::string> environments;
-	int32_t selectedEnvironment = 0;
+	std::map<std::string, std::string> environments;
+	std::string selectedEnvironment = "papermill";
 
 	VulkanExample() : VulkanExampleBase()
 	{
@@ -354,13 +355,7 @@ public:
 			exit(-1);
 		}
 #endif
-		readDirectory(assetpath + "environments", environments);
-		for (auto i = 0; i < environments.size(); i++) {
-			if (environments[i] == "papermill.ktx") {
-				selectedEnvironment = i;
-				break;
-			}
-		}
+		readDirectory(assetpath + "environments", "*.ktx", environments, false);
 
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 
@@ -1660,13 +1655,13 @@ public:
 	{
 		VulkanExampleBase::prepare();
 
-        camera.type = Camera::CameraType::lookat;
+		camera.type = Camera::CameraType::lookat;
 
-        camera.setPerspective(45.0f, (float)width / (float)height, 0.1f, 256.0f);
-        camera.rotationSpeed = 0.25f;
-        camera.movementSpeed = 0.1f;
-        camera.setPosition({ 0.0f, 0.0f, 2.5f });
-        camera.setRotation({ 0.0f, 0.0f, 0.0f });
+		camera.setPerspective(45.0f, (float)width / (float)height, 0.1f, 256.0f);
+		camera.rotationSpeed = 0.25f;
+		camera.movementSpeed = 0.1f;
+		camera.setPosition({ 0.0f, 0.0f, 2.5f });
+		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 
 		waitFences.resize(renderAhead);
 		presentCompleteSemaphores.resize(renderAhead);
@@ -1732,8 +1727,6 @@ public:
 #if defined(__ANDROID__)
 		scale = (float)vks::android::screenDensity / (float)ACONFIGURATION_DENSITY_MEDIUM;
 #endif
-		//io.FontGlobalScale = scale;
-
 		ui->pushConstBlock.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);
 		ui->pushConstBlock.translate = glm::vec2(-1.0f);
 
@@ -1838,9 +1831,9 @@ public:
 
 			if (ui->header("Scene")) {
 				ui->text("Environment");
-				if (ui->combo("##environment", &selectedEnvironment, environments)) {
+				if (ui->combo("##environment", selectedEnvironment, environments)) {
 					vkDeviceWaitIdle(device);
-					loadEnvironment(assetpath + "environments/" + environments[selectedEnvironment]);
+					loadEnvironment(environments[selectedEnvironment]);
 					setupDescriptors();
 					updateCBs = true;
 				}

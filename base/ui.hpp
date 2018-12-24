@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <array>
+#include <map>
 
 #include "vulkan/vulkan.h"
 #include "imgui/imgui.h"
@@ -322,6 +323,23 @@ public:
 		}
 		uint32_t itemCount = static_cast<uint32_t>(charitems.size());
 		return ImGui::Combo(caption, itemindex, &charitems[0], itemCount, itemCount);
+	}
+	bool combo(const char *caption, std::string &selectedkey, std::map<std::string, std::string> items) {
+		bool selectionChanged = false;
+		if (ImGui::BeginCombo(caption, selectedkey.c_str())) {
+			for (auto it = items.begin(); it != items.end(); ++it) {
+				const bool isSelected = it->first == selectedkey;
+				if (ImGui::Selectable(it->first.c_str(), isSelected)) {
+					selectionChanged = it->first != selectedkey;
+					selectedkey = it->first;
+				}
+				if (isSelected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		return selectionChanged;
 	}
 	bool button(const char *caption) {
 		return ImGui::Button(caption);
