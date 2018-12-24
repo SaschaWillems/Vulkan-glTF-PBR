@@ -377,11 +377,6 @@ public:
 		// Scale and center model to fit into viewport
 		scale = 1.0f / models.scene.dimensions.radius;
 		camera.setPosition(glm::vec3(-models.scene.dimensions.center.x * scale, -models.scene.dimensions.center.y * scale, camera.position.z));
-
-		// @TODO: Test
-		for (auto ext : models.scene.extensions) {
-			std::cout << ext << std::endl;
-		}
 	}
 
 	void setupNodeDescriptorSet(vkglTF::Node *node) {
@@ -1698,25 +1693,34 @@ public:
 		io.MouseDown[0] = mouseButtons.left;
 		io.MouseDown[1] = mouseButtons.right;
 
+		float scale = 1.0f;
+
+#if defined(__ANDROID__)
+		scale = (float)vks::android::screenDensity / (float)ACONFIGURATION_DENSITY_MEDIUM;
+#endif
+		//io.FontGlobalScale = scale;
+
 		ui->pushConstBlock.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);
 		ui->pushConstBlock.translate = glm::vec2(-1.0f);
 
-		const float sideBarWidth = 175.0f;
+		const float sideBarWidth = 160.0f * scale;
+		const float collapseBarWidth = 15.0f * scale;
+		const ImVec2 collapseButtonSize = ImVec2(collapseBarWidth, 50.0f * scale);
 		bool updateShaderParams = false;
 		bool updateCBs = false;
 
 		ImGui::NewFrame();
 
-		const float left = width - (ui->collapsed ? 15 : sideBarWidth);
+		const float left = width - (ui->collapsed ? collapseBarWidth : sideBarWidth);
 		ImGui::SetNextWindowPos(ImVec2(left, 0));
-		ImGui::SetNextWindowSize(ImVec2(ui->collapsed ? 15 : sideBarWidth, height), ImGuiSetCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(ui->collapsed ? collapseBarWidth : sideBarWidth, height), ImGuiSetCond_Always);
 		ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysUseWindowPadding);
 
 		ImGui::Columns(2, "settings", false);
-		ImGui::SetColumnWidth(0, 15);
+		ImGui::SetColumnWidth(0, collapseBarWidth);
 		ImGui::SetColumnOffset(0, 0);
-		ImGui::SetCursorPosY((float)height / 2.0f - 25.0f);
-		if (ImGui::Button(ui->collapsed ? "<" : ">", ImVec2(15, 50))) {
+		ImGui::SetCursorPosY((float)height / 2.0f - collapseButtonSize.y / 2.0f);
+		if (ImGui::Button(ui->collapsed ? "<" : ">", ImVec2(collapseButtonSize))) {
 			ui->collapsed = !ui->collapsed;
 		}
 		ImGui::SetCursorPosY(0.0f);
@@ -1907,10 +1911,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
 }
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)
 // Android entry point
-// A note on app_dummy(): This is required as the compiler may otherwise remove the main entry point of the application
 void android_main(android_app* state)
 {
-	app_dummy();
 	vulkanExample = new VulkanExample();
 	state->userData = vulkanExample;
 	state->onAppCmd = VulkanExample::handleAppCommand;

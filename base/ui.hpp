@@ -14,6 +14,9 @@
 #include "VulkanDevice.hpp"
 #include "VulkanUtils.hpp"
 #include "VulkanTexture.hpp"
+#if defined(__ANDROID__)
+#include <android/asset_manager.h>
+#endif
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -51,11 +54,21 @@ public:
 		ImGuiIO& io = ImGui::GetIO();
 		unsigned char* fontData;
 		int texWidth, texHeight;
-		// TODO: Android
-#if defined(__ANDROID__)		
+		ImFont *font;
+
+#if defined(__ANDROID__)
+		float scale = (float)vks::android::screenDensity / (float)ACONFIGURATION_DENSITY_MEDIUM;
+		AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, "Roboto-Medium.ttf", AASSET_MODE_STREAMING);
+		assert(asset);
+		size_t size = AAsset_getLength(asset);
+		assert(size > 0);
+		char *fontAsset = new char[size];
+		AAsset_read(asset, fontAsset, size);
+		AAsset_close(asset);
+		io.Fonts->AddFontFromMemoryTTF(fontAsset, size, 14.0f * scale);
+		delete[] fontAsset;
 #else
-		ImFont *font = io.Fonts->AddFontFromFileTTF("./../data/Roboto-Medium.ttf", 16.0f);
-		assert(font);
+		io.Fonts->AddFontFromFileTTF("./../data/Roboto-Medium.ttf", 16.0f);
 #endif
 		io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
 		fontTexture.loadFromBuffer(fontData, texWidth * texHeight * 4 * sizeof(char), VK_FORMAT_R8G8B8A8_UNORM, texWidth, texHeight, vulkanDevice, queue);
@@ -63,16 +76,6 @@ public:
 		/*
 			Setup
 		*/
-
-#if defined(__ANDROID__)		
-		if (vks::android::screenDensity >= ACONFIGURATION_DENSITY_XXHIGH)
-			scale = 3.5f;
-		else if (vks::android::screenDensity >= ACONFIGURATION_DENSITY_XHIGH)
-			scale = 2.5f;
-		else if (vks::android::screenDensity >= ACONFIGURATION_DENSITY_HIGH)
-			scale = 2.0f;
-#endif
-
 		ImGuiStyle& style = ImGui::GetStyle();
 		style.WindowMinSize = ImVec2(5.0f, 5.0f);
 		style.WindowRounding = 0.0f;
