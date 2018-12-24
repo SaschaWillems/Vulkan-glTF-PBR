@@ -30,7 +30,7 @@ namespace vks
 	class Texture {
 	public:
 		vks::VulkanDevice *device;
-		VkImage image;
+		VkImage image = VK_NULL_HANDLE;
 		VkImageLayout imageLayout;
 		VkDeviceMemory deviceMemory;
 		VkImageView view;

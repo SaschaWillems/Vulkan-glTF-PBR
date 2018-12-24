@@ -118,6 +118,12 @@ public:
 
 	UI *ui;
 
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+	const std::string assetpath = "";
+#else
+	const std::string assetpath = "./../data/";
+#endif
+
 	bool rotateModel = false;
 	glm::vec3 modelrot = glm::vec3(0.0f);
 	glm::vec3 modelPos = glm::vec3(0.0f);
@@ -140,6 +146,9 @@ public:
 		float alphaMask;
 		float alphaMaskCutoff;
 	} pushConstBlockMaterial;
+
+	std::vector<std::string> environments;
+	int32_t selectedEnvironment = 0;
 
 	VulkanExample() : VulkanExampleBase()
 	{
@@ -329,26 +338,42 @@ public:
 		}
 	}
 
+	void loadEnvironment(std::string filename)
+	{
+		std::cout << "Loading environment from " << filename << std::endl;
+		if (textures.environmentCube.image) {
+			textures.environmentCube.destroy();
+			textures.irradianceCube.destroy();
+			textures.prefilteredCube.destroy();
+		}
+		textures.environmentCube.loadFromFile(filename, VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
+		generateCubemaps();
+	}
+
 	void loadAssets()
 	{
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
-		const std::string assetpath = "";
 #else
 		const std::string assetpath = "./../data/";
 		struct stat info;
 		if (stat(assetpath.c_str(), &info) != 0) {
 			std::string msg = "Could not locate asset path in \"" + assetpath + "\".\nMake sure binary is run from correct relative directory!";
 			std::cerr << msg << std::endl;
-#if defined(_WIN32)
-			MessageBox(NULL, msg.c_str(), "Fatal error", MB_OK | MB_ICONERROR);
-#endif
 			exit(-1);
 		}
 #endif
+		readDirectory(assetpath + "environments", environments);
+		for (auto i = 0; i < environments.size(); i++) {
+			if (environments[i] == "papermill.ktx") {
+				selectedEnvironment = i;
+				break;
+			}
+		}
+
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 
 		std::string sceneFile = assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf";
-		std::string envMapFile = assetpath + "textures/papermill_hdr16f_cube.ktx";
+		std::string envMapFile = assetpath + "environments/papermill.ktx";
 		shaderValuesScene.flipUV = 1.0f;
 		for (size_t i = 0; i < args.size(); i++) {
 			if (std::string(args[i]).find(".gltf") != std::string::npos) {
@@ -371,10 +396,10 @@ public:
 			}
 		}
 
-		textures.environmentCube.loadFromFile(envMapFile, VK_FORMAT_R16G16B16A16_SFLOAT, vulkanDevice, queue);
 		models.scene.loadFromFile(sceneFile, vulkanDevice, queue);
-
 		models.skybox.loadFromFile(assetpath + "models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
+
+		loadEnvironment(envMapFile.c_str());
 
 		// Scale and center model to fit into viewport
 		scale = 1.0f / models.scene.dimensions.radius;
@@ -1802,6 +1827,16 @@ public:
 					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f, 0.0f, 0.0f, shaderValuesParams.scaleFGDSpec[3]);
 					updateShaderParams = true;
 				};
+			}
+
+			if (ui->header("Scene")) {
+				ui->text("Environment");
+				if (ui->combo("##environment", &selectedEnvironment, environments)) {
+					vkDeviceWaitIdle(device);
+					loadEnvironment(assetpath + "environments/" + environments[selectedEnvironment]);
+					setupDescriptors();
+					updateCBs = true;
+				}
 			}
 		}
 

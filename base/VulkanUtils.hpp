@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
 #include "vulkan/vulkan.h"
 #include "VulkanDevice.hpp"
 #if defined(__ANDROID__)
@@ -113,4 +114,27 @@ VkPipelineShaderStageCreateInfo loadShader(VkDevice device, std::string filename
 #endif
 	assert(shaderStage.module != VK_NULL_HANDLE);
 	return shaderStage;
+}
+
+void readDirectory(const std::string& directory, std::vector<std::string> &filelist)
+{
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+	AAssetDir* assetDir = AAssetManager_openDir(androidApp->activity->assetManager, directory.c_str());
+	AAssetDir_rewind(assetDir);
+	const char* assetName;
+	while((assetName = AAssetDir_getNextFileName(assetDir)) != 0) {
+		filelist.push_back(assetName);
+	}
+	AAssetDir_close(assetDir);
+#elif defined(VK_USE_PLATFORM_WIN32_KHR)
+	std::string pattern(directory + "/*.ktx");
+	WIN32_FIND_DATA data;
+	HANDLE hFind;
+	if ((hFind = FindFirstFile(pattern.c_str(), &data)) != INVALID_HANDLE_VALUE) {
+		do {
+			filelist.push_back(data.cFileName);
+		} while (FindNextFile(hFind, &data) != 0);
+		FindClose(hFind);
+	}
+#endif
 }
