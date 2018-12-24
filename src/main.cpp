@@ -21,6 +21,7 @@
 #include "VulkanTexture.hpp"
 #include "VulkanglTFModel.hpp"
 #include "VulkanUtils.hpp"
+#include "ui.hpp"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -64,11 +65,12 @@ public:
 		float flipUV = 0.0f;
 	} shaderValuesScene, shaderValuesSkybox;
 
-	struct UBOParams {
+	struct shaderValuesParams {
 		glm::vec4 lightDir;
 		float exposure = 4.5f;
 		float gamma = 2.2f;
 		float prefilteredCubeMipLevels;
+		float scaleIBLAmbient = 1.0f;
 	} shaderValuesParams;
 
 	VkPipelineLayout pipelineLayout;
@@ -105,11 +107,14 @@ public:
 	float animationTimer = 0.0f;
 
 	float scale = 1.0f;
+	bool displayBackground = true;
 	
 	struct LightSource {
 		glm::vec3 color = glm::vec3(1.0f);
 		glm::vec3 rotation = glm::vec3(75.0f, 40.0f, 0.0f);
 	} lightSource;
+
+	UI *ui;
 
 	bool rotateModel = false;
 	glm::vec3 modelrot = glm::vec3(0.0f);
@@ -181,6 +186,8 @@ public:
 		textures.prefilteredCube.destroy();
 		textures.lutBrdf.destroy();
 		textures.empty.destroy();
+
+		delete ui;
 	}
 
 	void renderNode(vkglTF::Node *node, uint32_t cbIndex, vkglTF::Material::AlphaMode alphaMode) {
@@ -285,9 +292,11 @@ public:
 
 			VkDeviceSize offsets[1] = { 0 };
 
-			vkCmdBindDescriptorSets(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i].skybox, 0, nullptr);
-			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
-			models.skybox.draw(currentCB);
+			if (displayBackground) {
+				vkCmdBindDescriptorSets(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i].skybox, 0, nullptr);
+				vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
+				models.skybox.draw(currentCB);
+			}
 
 			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
 
@@ -309,6 +318,9 @@ public:
 			for (auto node : model.nodes) {
 				renderNode(node, i, vkglTF::Material::ALPHAMODE_BLEND);
 			}
+
+			// User interface
+			ui->draw(currentCB);
 
 			vkCmdEndRenderPass(currentCB);
 			VK_CHECK_RESULT(vkEndCommandBuffer(currentCB));
@@ -365,6 +377,11 @@ public:
 		// Scale and center model to fit into viewport
 		scale = 1.0f / models.scene.dimensions.radius;
 		camera.setPosition(glm::vec3(-models.scene.dimensions.center.x * scale, -models.scene.dimensions.center.y * scale, camera.position.z));
+
+		// @TODO: Test
+		for (auto ext : models.scene.extensions) {
+			std::cout << ext << std::endl;
+		}
 	}
 
 	void setupNodeDescriptorSet(vkglTF::Node *node) {
@@ -1658,9 +1675,134 @@ public:
 		prepareUniformBuffers();
 		setupDescriptors();
 		preparePipelines();
+
+		ui = new UI(vulkanDevice, renderPass, queue, pipelineCache, settings.sampleCount);
+		updateOverlay();
+
 		buildCommandBuffers();
 
 		prepared = true;
+	}
+
+	/*
+		Update ImGui user interface
+	*/
+	void updateOverlay()
+	{
+		ImGuiIO& io = ImGui::GetIO();
+
+		io.DisplaySize = ImVec2((float)width, (float)height);
+		io.DeltaTime = frameTimer;
+
+		io.MousePos = ImVec2(mousePos.x, mousePos.y);
+		io.MouseDown[0] = mouseButtons.left;
+		io.MouseDown[1] = mouseButtons.right;
+
+		ui->pushConstBlock.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);
+		ui->pushConstBlock.translate = glm::vec2(-1.0f);
+
+		const float sideBarWidth = 175.0f;
+		bool updateShaderParams = false;
+		bool updateCBs = false;
+
+		ImGui::NewFrame();
+
+		const float left = width - (ui->collapsed ? 15 : sideBarWidth);
+		ImGui::SetNextWindowPos(ImVec2(left, 0));
+		ImGui::SetNextWindowSize(ImVec2(ui->collapsed ? 15 : sideBarWidth, height), ImGuiSetCond_Always);
+		ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysUseWindowPadding);
+
+		ImGui::Columns(2, "settings", false);
+		ImGui::SetColumnWidth(0, 15);
+		ImGui::SetColumnOffset(0, 0);
+		ImGui::SetCursorPosY((float)height / 2.0f - 25.0f);
+		if (ImGui::Button(ui->collapsed ? "<" : ">", ImVec2(15, 50))) {
+			ui->collapsed = !ui->collapsed;
+		}
+		ImGui::SetCursorPosY(0.0f);
+		ImGui::NextColumn();
+
+		if (!ui->collapsed) {
+			ui->text("Vulkan glTF 2.0 PBR");
+			ImGui::Text("%.1d fps (%.2f ms)", lastFPS, (1000.0f / lastFPS));
+
+			if (ui->header("Environment")) {
+				if (ui->checkbox("Background", &displayBackground)) {
+					updateShaderParams = true;
+				}
+				ui->text("Exposure");
+				if (ui->slider("##exposure", &shaderValuesParams.exposure, 0.1f, 10.0f)) {
+					updateShaderParams = true;
+				}
+				ui->text("Gamma");
+				if (ui->slider("##gamma", &shaderValuesParams.gamma, 0.1f, 4.0f)) {
+					updateShaderParams = true;
+				}
+				ui->text("IBL contribution");
+				if (ui->slider("##ibl", &shaderValuesParams.scaleIBLAmbient, 0.0f, 1.0f)) {
+					updateShaderParams = true;
+				}
+			}
+		}
+
+		ImGui::End();
+		ImGui::Render();
+
+		ImDrawData* imDrawData = ImGui::GetDrawData();
+
+		// Check if ui buffers need to be recreated
+		if (imDrawData) {
+			VkDeviceSize vertexBufferSize = imDrawData->TotalVtxCount * sizeof(ImDrawVert);
+			VkDeviceSize indexBufferSize = imDrawData->TotalIdxCount * sizeof(ImDrawIdx);
+
+			bool updateBuffers = (ui->vertexBuffer.buffer == VK_NULL_HANDLE) || (ui->vertexBuffer.count != imDrawData->TotalVtxCount) || (ui->indexBuffer.buffer == VK_NULL_HANDLE) || (ui->indexBuffer.count != imDrawData->TotalIdxCount);
+
+			if (updateBuffers) {
+				vkDeviceWaitIdle(device);
+				if (ui->vertexBuffer.buffer) {
+					ui->vertexBuffer.destroy();
+				}
+				ui->vertexBuffer.create(vulkanDevice, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, vertexBufferSize);
+				ui->vertexBuffer.count = imDrawData->TotalVtxCount;
+				if (ui->indexBuffer.buffer) {
+					ui->indexBuffer.destroy();
+				}
+				ui->indexBuffer.create(vulkanDevice, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, indexBufferSize);
+				ui->indexBuffer.count = imDrawData->TotalIdxCount;
+			}
+
+			// Upload data
+			ImDrawVert* vtxDst = (ImDrawVert*)ui->vertexBuffer.mapped;
+			ImDrawIdx* idxDst = (ImDrawIdx*)ui->indexBuffer.mapped;
+			for (int n = 0; n < imDrawData->CmdListsCount; n++) {
+				const ImDrawList* cmd_list = imDrawData->CmdLists[n];
+				memcpy(vtxDst, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+				memcpy(idxDst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+				vtxDst += cmd_list->VtxBuffer.Size;
+				idxDst += cmd_list->IdxBuffer.Size;
+			}
+
+			ui->vertexBuffer.flush();
+			ui->indexBuffer.flush();
+
+			updateCBs = updateCBs || updateBuffers;
+		}
+
+		if (updateCBs) {
+			vkDeviceWaitIdle(device);
+			buildCommandBuffers();
+			vkDeviceWaitIdle(device);
+		}
+
+		if (updateShaderParams) {
+			updateParams();
+		}
+
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+		if (mouseButtons.left) {
+			mouseButtons.left = false;
+		}
+#endif
 	}
 
 	virtual void render()
@@ -1668,6 +1810,8 @@ public:
 		if (!prepared) {
 			return;
 		}
+
+		updateOverlay();
 
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[frameIndex], VK_TRUE, UINT64_MAX));
 		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[frameIndex]));
@@ -1736,42 +1880,6 @@ public:
 			updateUniformBuffers();
 		}
 	}
-
-#if !defined(VK_USE_PLATFORM_ANDROID_KHR)
-	virtual void keyPressed(uint32_t key)
-	{
-		switch (key) {
-			case KEY_F1:
-				if (shaderValuesParams.exposure > 0.1f) {
-					shaderValuesParams.exposure -= 0.1f;
-					updateParams();
-					std::cout << "Exposure: " << shaderValuesParams.exposure << std::endl;
-				}
-				break;
-			case KEY_F2:
-				if (shaderValuesParams.exposure < 10.0f) {
-					shaderValuesParams.exposure += 0.1f;
-					updateParams();
-					std::cout << "Exposure: " << shaderValuesParams.exposure << std::endl;
-				}
-				break;
-			case KEY_F3:
-				if (shaderValuesParams.gamma > 0.1f) {
-					shaderValuesParams.gamma -= 0.1f;
-					updateParams();
-					std::cout << "Gamma: " << shaderValuesParams.gamma << std::endl;
-				}
-				break;
-			case KEY_F4:
-				if (shaderValuesParams.gamma < 10.0f) {
-					shaderValuesParams.gamma += 0.1f;
-					updateParams();
-					std::cout << "Gamma: " << shaderValuesParams.gamma << std::endl;
-				}
-				break;
-		}
-	}
-#endif
 };
 
 VulkanExample *vulkanExample;

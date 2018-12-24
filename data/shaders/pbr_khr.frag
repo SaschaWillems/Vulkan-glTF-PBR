@@ -22,6 +22,7 @@ layout (set = 0, binding = 1) uniform UBOParams {
 	float exposure;
 	float gamma;
 	float prefilteredCubeMipLevels;
+	float scaleIBLAmbient;
 } uboParams;
 
 layout (set = 0, binding = 2) uniform samplerCube samplerIrradiance;
@@ -151,11 +152,10 @@ vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection)
 	vec3 diffuse = diffuseLight * pbrInputs.diffuseColor;
 	vec3 specular = specularLight * (pbrInputs.specularColor * brdf.x + brdf.y);
 
-	const vec2 u_ScaleIBLAmbient = vec2(1.0f);
-
 	// For presentation, this allows us to disable IBL terms
-	diffuse *= u_ScaleIBLAmbient.x;
-	specular *= u_ScaleIBLAmbient.y;
+	// For presentation, this allows us to disable IBL terms
+	diffuse *= uboParams.scaleIBLAmbient;
+	specular *= uboParams.scaleIBLAmbient;
 
 	return diffuse + specular;
 }

@@ -49,12 +49,13 @@
 #include "VulkanDevice.hpp"
 #include "VulkanSwapChain.hpp"
 
+#include "imgui/imgui.h"
+
 class VulkanExampleBase
 {
 private:	
 	float fpsTimer = 0.0f;
 	uint32_t frameCounter = 0;
-	uint32_t lastFPS = 0;
 	std::string getWindowTitle();
 	bool viewUpdated = false;
 	uint32_t destWidth;
@@ -105,6 +106,7 @@ public:
 	Camera camera;
 	glm::vec2 mousePos;
 	bool paused = false;
+	uint32_t lastFPS = 0;
 
 	struct Settings {
 		bool validation = false;
