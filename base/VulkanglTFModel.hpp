@@ -23,6 +23,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <gli/gli.hpp>
 
+#define TINYGLTF_IMPLEMENTATION
+#define TINYGLTF_NO_STB_IMAGE_WRITE
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_MSC_SECURE_CRT
 #include "tiny_gltf.h"
 
 #if defined(__ANDROID__)
@@ -522,12 +526,12 @@ namespace vkglTF
 		};
 
 		struct Vertices {
-			VkBuffer buffer;
+			VkBuffer buffer = VK_NULL_HANDLE;
 			VkDeviceMemory memory;
 		} vertices;
 		struct Indices {
 			int count;
-			VkBuffer buffer;
+			VkBuffer buffer = VK_NULL_HANDLE;
 			VkDeviceMemory memory;
 		} indices;
 
@@ -551,16 +555,27 @@ namespace vkglTF
 
 		void destroy(VkDevice device)
 		{
-			vkDestroyBuffer(device, vertices.buffer, nullptr);
-			vkFreeMemory(device, vertices.memory, nullptr);
-			vkDestroyBuffer(device, indices.buffer, nullptr);
-			vkFreeMemory(device, indices.memory, nullptr);
+			if (vertices.buffer != VK_NULL_HANDLE) {
+				vkDestroyBuffer(device, vertices.buffer, nullptr);
+				vkFreeMemory(device, vertices.memory, nullptr);
+			}
+			if (indices.buffer != VK_NULL_HANDLE) {
+				vkDestroyBuffer(device, indices.buffer, nullptr);
+				vkFreeMemory(device, indices.memory, nullptr);
+			}
 			for (auto texture : textures) {
 				texture.destroy();
 			}
+			textures.resize(0);
 			for (auto node : nodes) {
 				delete node;
 			}
+			materials.resize(0);
+			animations.resize(0);
+			nodes.resize(0);
+			linearNodes.resize(0);
+			extensions.resize(0);
+			skins.resize(0);
 		};
 
 		void loadNode(vkglTF::Node *parent, const tinygltf::Node &node, uint32_t nodeIndex, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
@@ -809,20 +824,31 @@ namespace vkglTF
 				}
 
 				// Extensions
-				if (mat.extPBRValues.size() > 0) {
-					// KHR_materials_pbrSpecularGlossiness
-					if (mat.extPBRValues.find("specularGlossinessTexture") != mat.extPBRValues.end()) {
-						material.extension.specularGlossinessTexture = &textures[gltfModel.textures[mat.extPBRValues["specularGlossinessTexture"].TextureIndex()].source];
+				// @TODO: Find out if there is a nicer way of reading these properties with recent tinygltf headers
+				if (mat.extensions.find("KHR_materials_pbrSpecularGlossiness") != mat.extensions.end()) {
+					auto ext = mat.extensions.find("KHR_materials_pbrSpecularGlossiness");
+					if (ext->second.Has("specularGlossinessTexture")) {
+						auto index = ext->second.Get("specularGlossinessTexture").Get("index");
+						material.extension.specularGlossinessTexture = &textures[gltfModel.textures[index.Get<int>()].source];
 						material.pbrWorkflows.specularGlossiness = true;
 					}
-					if (mat.extPBRValues.find("diffuseTexture") != mat.extPBRValues.end()) {
-						material.extension.diffuseTexture = &textures[gltfModel.textures[mat.extPBRValues["diffuseTexture"].TextureIndex()].source];
+					if (ext->second.Has("diffuseTexture")) {
+						auto index = ext->second.Get("diffuseTexture").Get("index");
+						material.extension.diffuseTexture = &textures[gltfModel.textures[index.Get<int>()].source];
 					}
-					if (mat.extPBRValues.find("diffuseFactor") != mat.extPBRValues.end()) {
-						material.extension.diffuseFactor = glm::make_vec4(mat.extPBRValues["diffuseFactor"].ColorFactor().data());
+					if (ext->second.Has("diffuseFactor")) {
+						auto factor = ext->second.Get("diffuseFactor");
+						for (uint32_t i = 0; i < factor.ArrayLen(); i++) {
+							auto val = factor.Get(i);
+							material.extension.diffuseFactor[i] = val.IsNumber() ? (float)val.Get<double>() : (float)val.Get<int>();
+						}
 					}
-					if (mat.extPBRValues.find("specularFactor") != mat.extPBRValues.end()) {
-						material.extension.specularFactor = glm::vec4(glm::make_vec3(mat.extPBRValues["specularFactor"].ColorFactor().data()), 1.0);
+					if (ext->second.Has("specularFactor")) {
+						auto factor = ext->second.Get("specularFactor");
+						for (uint32_t i = 0; i < factor.ArrayLen(); i++) {
+							auto val = factor.Get(i);
+							material.extension.specularFactor[i] = val.IsNumber() ? (float)val.Get<double>() : (float)val.Get<int>();
+						}
 					}
 				}
 
@@ -947,6 +973,7 @@ namespace vkglTF
 			tinygltf::Model gltfModel;
 			tinygltf::TinyGLTF gltfContext;
 			std::string error;
+			std::string warning;
 
 			this->device = device;
 
@@ -959,10 +986,10 @@ namespace vkglTF
 			AAsset_read(asset, fileData, size);
 			AAsset_close(asset);
 			std::string baseDir;
-			bool fileLoaded = gltfContext.LoadASCIIFromString(&gltfModel, &error, fileData, size, baseDir);
+			bool fileLoaded = gltfContext.LoadASCIIFromString(&gltfModel, &error, &warning, fileData, size, baseDir);
 			free(fileData);
 #else
-			bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, filename.c_str());
+			bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
 #endif
 			std::vector<uint32_t> indexBuffer;
 			std::vector<Vertex> vertexBuffer;

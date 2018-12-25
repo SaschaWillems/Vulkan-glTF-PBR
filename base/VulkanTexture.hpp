@@ -19,8 +19,6 @@
 
 #include <gli/gli.hpp>
 
-#include "tiny_gltf.h"
-
 #if defined(__ANDROID__)
 #include <android/asset_manager.h>
 #endif
