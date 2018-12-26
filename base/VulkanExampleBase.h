@@ -140,15 +140,15 @@ public:
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)
 	// true if application has focused, false if moved to background
 	bool focused = false;
-	struct TouchPos {
-		int32_t x;
-		int32_t y;
-	} touchPos;
-	bool touchDown = false;
-	double touchTimer = 0.0;
-	int64_t lastTapTime = 0;
-	/** @brief Product model and manufacturer of the Android device (via android.Product*) */
 	std::string androidProduct;
+	struct TouchPoint {
+	    int32_t id;
+	    float x;
+	    float y;
+	    bool down = false;
+	};
+	float pinchDist = 0.0f;
+	std::array<TouchPoint, 2> touchPoints;
 #elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
 	wl_display *display = nullptr;
 	wl_registry *registry = nullptr;
