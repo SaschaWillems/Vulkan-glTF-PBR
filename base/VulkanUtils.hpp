@@ -123,7 +123,9 @@ void readDirectory(const std::string& directory, const std::string &pattern, std
 	AAssetDir_rewind(assetDir);
 	const char* assetName;
 	while ((assetName = AAssetDir_getNextFileName(assetDir)) != 0) {
-		filelist.push_back(assetName);
+		std::string filename(assetName);
+		filename.erase(filename.find_last_of("."), std::string::npos);
+		filelist[filename] = directory + "/" + assetName;
 	}
 	AAssetDir_close(assetDir);
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
