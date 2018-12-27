@@ -103,8 +103,9 @@ public:
 	const uint32_t renderAhead = 2;
 	uint32_t frameIndex = 0;
 
-	uint32_t animationIndex = 0;
+	int32_t animationIndex = 0;
 	float animationTimer = 0.0f;
+	bool animate = true;
 
 	float scale = 1.0f;
 	bool displayBackground = true;
@@ -1834,6 +1835,17 @@ public:
 					setupDescriptors();
 					updateCBs = true;
 				}
+				if (models.scene.animations.size() > 0) {
+					if (ui->header("Animations")) {
+						ui->checkbox("Animate", &animate);
+						std::vector<std::string> animationNames;
+						for (auto animation : models.scene.animations) {
+							animationNames.push_back(animation.name);
+						}
+						ui->text("Animation");
+						ui->combo("##animation", &animationIndex, animationNames);
+					}
+				}
 			}
 		}
 
@@ -1956,7 +1968,7 @@ public:
 					modelrot.y -= 360.0f;
 				}
 			}
-			if (models.scene.animations.size() > 0) {
+			if ((animate) && (models.scene.animations.size() > 0)) {
 				animationTimer += frameTimer * 0.75f;
 				if (animationTimer > models.scene.animations[animationIndex].end) {
 					animationTimer -= models.scene.animations[animationIndex].end;
