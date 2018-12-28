@@ -17,6 +17,10 @@
 #include <chrono>
 #include <map>
 
+#if defined(__ANDROID__)
+#define TINYGLTF_ANDROID_LOAD_FROM_ASSETS
+#endif
+
 #include <vulkan/vulkan.h>
 #include "VulkanExampleBase.h"
 #include "VulkanTexture.hpp"
@@ -344,6 +348,7 @@ public:
 	void loadAssets()
 	{
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
+		tinygltf::asset_manager = androidApp->activity->assetManager;
 #else
 		const std::string assetpath = "./../data/";
 		struct stat info;

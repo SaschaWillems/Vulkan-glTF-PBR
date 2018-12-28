@@ -978,16 +978,7 @@ namespace vkglTF
 			this->device = device;
 
 #if defined(__ANDROID__)
-			AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_STREAMING);
-			assert(asset);
-			size_t size = AAsset_getLength(asset);
-			assert(size > 0);
-			char* fileData = new char[size];
-			AAsset_read(asset, fileData, size);
-			AAsset_close(asset);
-			std::string baseDir;
-			bool fileLoaded = gltfContext.LoadASCIIFromString(&gltfModel, &error, &warning, fileData, size, baseDir);
-			free(fileData);
+            bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
 #else
 			bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
 #endif
