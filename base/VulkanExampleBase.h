@@ -56,8 +56,6 @@ class VulkanExampleBase
 private:	
 	float fpsTimer = 0.0f;
 	uint32_t frameCounter = 0;
-	std::string getWindowTitle();
-	bool viewUpdated = false;
 	uint32_t destWidth;
 	uint32_t destHeight;
 	bool resizing = false;

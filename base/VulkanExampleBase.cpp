@@ -97,15 +97,6 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 	}
 	return vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
 }
-
-std::string VulkanExampleBase::getWindowTitle()
-{
-	std::string device(deviceProperties.deviceName);
-	std::string windowTitle;
-	windowTitle = title + " - " + device + " - " + std::to_string(lastFPS) + " fps";
-	return windowTitle;
-}
-
 void VulkanExampleBase::prepare()
 {
 	/*
@@ -311,10 +302,6 @@ void VulkanExampleBase::prepare()
 void VulkanExampleBase::renderFrame()
 {
 	auto tStart = std::chrono::high_resolution_clock::now();
-	if (viewUpdated)
-	{
-		viewUpdated = false;
-	}
 
 	render();
 	frameCounter++;
@@ -322,18 +309,9 @@ void VulkanExampleBase::renderFrame()
 	auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 	frameTimer = (float)tDiff / 1000.0f;
 	camera.update(frameTimer);
-	if (camera.moving())
-	{
-		viewUpdated = true;
-	}
 	fpsTimer += (float)tDiff;
-	if (fpsTimer > 1000.0f)
-	{
+	if (fpsTimer > 1000.0f) {
 		lastFPS = static_cast<uint32_t>((float)frameCounter * (1000.0f / fpsTimer));
-#if defined(_WIN32)
-		std::string windowTitle = getWindowTitle();
-		SetWindowText(window, windowTitle.c_str());
-#endif
 		fpsTimer = 0.0f;
 		frameCounter = 0;
 	}
@@ -430,20 +408,12 @@ void VulkanExampleBase::renderLoop()
 	while (!quit)
 	{
 		auto tStart = std::chrono::high_resolution_clock::now();
-		if (viewUpdated)
-		{
-			viewUpdated = false;
-		}
 		render();
 		frameCounter++;
 		auto tEnd = std::chrono::high_resolution_clock::now();
 		auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 		frameTimer = tDiff / 1000.0f;
 		camera.update(frameTimer);
-		if (camera.moving())
-		{
-			viewUpdated = true;
-		}
 		fpsTimer += (float)tDiff;
 		if (fpsTimer > 1000.0f)
 		{
@@ -456,10 +426,6 @@ void VulkanExampleBase::renderLoop()
 	while (!quit)
 	{
 		auto tStart = std::chrono::high_resolution_clock::now();
-		if (viewUpdated)
-		{
-			viewUpdated = false;
-		}
 
 		while (wl_display_prepare_read(display) != 0)
 			wl_display_dispatch_pending(display);
@@ -473,15 +439,10 @@ void VulkanExampleBase::renderLoop()
 		auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 		frameTimer = tDiff / 1000.0f;
 		camera.update(frameTimer);
-		if (camera.moving())
-		{
-			viewUpdated = true;
-		}
 		fpsTimer += (float)tDiff;
 		if (fpsTimer > 1000.0f)
 		{
-			std::string windowTitle = getWindowTitle();
-			wl_shell_surface_set_title(shell_surface, windowTitle.c_str());
+			wl_shell_surface_set_title(shell_surface, title.c_str());
 			lastFPS = (float)frameCounter * (1000.0f / fpsTimer);
 			fpsTimer = 0.0f;
 			frameCounter = 0;
@@ -492,10 +453,6 @@ void VulkanExampleBase::renderLoop()
 	while (!quit)
 	{
 		auto tStart = std::chrono::high_resolution_clock::now();
-		if (viewUpdated)
-		{
-			viewUpdated = false;
-		}
 		xcb_generic_event_t *event;
 		while ((event = xcb_poll_for_event(connection)))
 		{
@@ -508,17 +465,12 @@ void VulkanExampleBase::renderLoop()
 		auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
 		frameTimer = tDiff / 1000.0f;
 		camera.update(frameTimer);
-		if (camera.moving())
-		{
-			viewUpdated = true;
-		}
 		fpsTimer += (float)tDiff;
 		if (fpsTimer > 1000.0f)
 		{
-			std::string windowTitle = getWindowTitle();
 			xcb_change_property(connection, XCB_PROP_MODE_REPLACE,
 				window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8,
-				windowTitle.size(), windowTitle.c_str());
+				title.size(), title.c_str());
 			lastFPS = (float)frameCounter * (1000.0f / fpsTimer);
 			fpsTimer = 0.0f;
 			frameCounter = 0;
@@ -814,10 +766,9 @@ HWND VulkanExampleBase::setupWindow(HINSTANCE hinstance, WNDPROC wndproc)
 
 	AdjustWindowRectEx(&windowRect, dwStyle, FALSE, dwExStyle);
 
-	std::string windowTitle = getWindowTitle();
 	window = CreateWindowEx(0,
 		name.c_str(),
-		windowTitle.c_str(),
+		title.c_str(),
 		dwStyle | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
 		0,
 		0,
@@ -937,7 +888,6 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 	{
 		short wheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);
 		camera.translate(glm::vec3(0.0f, 0.0f, -(float)wheelDelta * 0.005f * camera.movementSpeed));
-		viewUpdated = true;
 		break;
 	}
 	case WM_MOUSEMOVE:
@@ -965,8 +915,8 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)
 int32_t VulkanExampleBase::handleAppInput(struct android_app* app, AInputEvent* event)
 {
-    ImGuiIO& io = ImGui::GetIO();
-    bool uiMouseCapture = io.WantCaptureMouse;
+	ImGuiIO& io = ImGui::GetIO();
+	bool uiMouseCapture = io.WantCaptureMouse;
 
 	VulkanExampleBase* vulkanExample = reinterpret_cast<VulkanExampleBase*>(app->userData);
 	if (AInputEvent_getType(event) == AINPUT_EVENT_TYPE_MOTION)
@@ -990,78 +940,78 @@ int32_t VulkanExampleBase::handleAppInput(struct android_app* app, AInputEvent* 
 
 				switch (flags) {
 					case AMOTION_EVENT_ACTION_DOWN:
-                    case AMOTION_EVENT_ACTION_POINTER_DOWN: {
-                        for (uint32_t i = 0; i < pointerCount; i++) {
-                            vulkanExample->touchPoints[i].x = AMotionEvent_getX(event, i);
-                            vulkanExample->touchPoints[i].y = AMotionEvent_getY(event, i);
-                        };
-                        int32_t pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
-                        if (pointerIndex < 2) {
-                            vulkanExample->touchPoints[pointerIndex].down = true;
-                        }
-                        if (pointerCount < 2) {
-                            // Detect single tap
-                            int64_t eventTime = AMotionEvent_getEventTime(event);
-                            int64_t downTime = AMotionEvent_getDownTime(event);
-                            if (eventTime - downTime <= vks::android::TAP_TIMEOUT) {
-                                float deadZone = (160.f / vks::android::screenDensity) * vks::android::TAP_SLOP * vks::android::TAP_SLOP;
-                                float x = AMotionEvent_getX(event, 0) - vulkanExample->touchPoints[0].x;
-                                float y = AMotionEvent_getY(event, 0) - vulkanExample->touchPoints[0].y;
-                                if ((x * x + y * y) < deadZone) {
-                                    vulkanExample->mousePos.x = vulkanExample->touchPoints[0].x;
-                                    vulkanExample->mousePos.y = vulkanExample->touchPoints[0].y;
-                                    vulkanExample->mouseButtons.left = true;
-                                }
-                            };
-                        }
-                        break;
-                    }
+					case AMOTION_EVENT_ACTION_POINTER_DOWN: {
+						for (uint32_t i = 0; i < pointerCount; i++) {
+							vulkanExample->touchPoints[i].x = AMotionEvent_getX(event, i);
+							vulkanExample->touchPoints[i].y = AMotionEvent_getY(event, i);
+						};
+						int32_t pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+						if (pointerIndex < 2) {
+							vulkanExample->touchPoints[pointerIndex].down = true;
+						}
+						if (pointerCount < 2) {
+							// Detect single tap
+							int64_t eventTime = AMotionEvent_getEventTime(event);
+							int64_t downTime = AMotionEvent_getDownTime(event);
+							if (eventTime - downTime <= vks::android::TAP_TIMEOUT) {
+								float deadZone = (160.f / vks::android::screenDensity) * vks::android::TAP_SLOP * vks::android::TAP_SLOP;
+								float x = AMotionEvent_getX(event, 0) - vulkanExample->touchPoints[0].x;
+								float y = AMotionEvent_getY(event, 0) - vulkanExample->touchPoints[0].y;
+								if ((x * x + y * y) < deadZone) {
+									vulkanExample->mousePos.x = vulkanExample->touchPoints[0].x;
+									vulkanExample->mousePos.y = vulkanExample->touchPoints[0].y;
+									vulkanExample->mouseButtons.left = true;
+								}
+							};
+						}
+						break;
+					}
 					case AMOTION_EVENT_ACTION_UP:
-                    case AMOTION_EVENT_ACTION_POINTER_UP: {
-                        int32_t pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
-                        if (pointerIndex < 2) {
-                            vulkanExample->touchPoints[pointerIndex].down = false;
-                        }
-                        if (pointerCount < 2) {
-                            vulkanExample->touchPoints[1].down = false;
-                        }
-                        break;
-                    }
+					case AMOTION_EVENT_ACTION_POINTER_UP: {
+						int32_t pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+						if (pointerIndex < 2) {
+							vulkanExample->touchPoints[pointerIndex].down = false;
+						}
+						if (pointerCount < 2) {
+							vulkanExample->touchPoints[1].down = false;
+						}
+						break;
+					}
 					case AMOTION_EVENT_ACTION_MOVE: {
-					    // Pinch and zoom
-                        if (!uiMouseCapture && vulkanExample->touchPoints[0].down && vulkanExample->touchPoints[1].down) {
-                            for (uint32_t i = 0; i < pointerCount; i++) {
-                                if (vulkanExample->touchPoints[i].down) {
-                                    vulkanExample->touchPoints[i].x = AMotionEvent_getX(event, i);
-                                    vulkanExample->touchPoints[i].y = AMotionEvent_getY(event, i);
-                                }
-                            };
-                            float dx = vulkanExample->touchPoints[1].x - vulkanExample->touchPoints[0].x;
-                            float dy = vulkanExample->touchPoints[1].y - vulkanExample->touchPoints[0].y;
-                            float d = sqrt(dx * dx + dy * dy);
-                            if (d < vulkanExample->pinchDist) {
-                                vulkanExample->camera.translate(glm::vec3(0.0f, 0.0f, 0.1f));
-                            };
-                            if (d > vulkanExample->pinchDist) {
-                                vulkanExample->camera.translate(glm::vec3(0.0f, 0.0f, -0.1f));
-                            };
-                            vulkanExample->pinchDist = d;
-                        } else {
-                            // Rotate
-                            if (!uiMouseCapture && vulkanExample->touchPoints[0].down) {
-                                int32_t eventX = AMotionEvent_getX(event, 0);
-                                int32_t eventY = AMotionEvent_getY(event, 0);
+						// Pinch and zoom
+						if (!uiMouseCapture && vulkanExample->touchPoints[0].down && vulkanExample->touchPoints[1].down) {
+							for (uint32_t i = 0; i < pointerCount; i++) {
+								if (vulkanExample->touchPoints[i].down) {
+									vulkanExample->touchPoints[i].x = AMotionEvent_getX(event, i);
+									vulkanExample->touchPoints[i].y = AMotionEvent_getY(event, i);
+								}
+							};
+							float dx = vulkanExample->touchPoints[1].x - vulkanExample->touchPoints[0].x;
+							float dy = vulkanExample->touchPoints[1].y - vulkanExample->touchPoints[0].y;
+							float d = sqrt(dx * dx + dy * dy);
+							if (d < vulkanExample->pinchDist) {
+								vulkanExample->camera.translate(glm::vec3(0.0f, 0.0f, 0.03f));
+							};
+							if (d > vulkanExample->pinchDist) {
+								vulkanExample->camera.translate(glm::vec3(0.0f, 0.0f, -0.03f));
+							};
+							vulkanExample->pinchDist = d;
+						} else {
+							// Rotate
+							if (!uiMouseCapture && vulkanExample->touchPoints[0].down) {
+								int32_t eventX = AMotionEvent_getX(event, 0);
+								int32_t eventY = AMotionEvent_getY(event, 0);
 
-                                float deltaX = (vulkanExample->touchPoints[0].y - eventY) * vulkanExample->camera.rotationSpeed * 0.5f;
-                                float deltaY = (vulkanExample->touchPoints[0].x - eventX) * vulkanExample->camera.rotationSpeed * 0.5f;
+								float deltaX = (vulkanExample->touchPoints[0].y - eventY) * vulkanExample->camera.rotationSpeed * 0.5f;
+								float deltaY = (vulkanExample->touchPoints[0].x - eventX) * vulkanExample->camera.rotationSpeed * 0.5f;
 
-                                vulkanExample->camera.rotate(glm::vec3(deltaX, 0.0f, 0.0f));
-                                vulkanExample->camera.rotate(glm::vec3(0.0f, -deltaY, 0.0f));
+								vulkanExample->camera.rotate(glm::vec3(deltaX, 0.0f, 0.0f));
+								vulkanExample->camera.rotate(glm::vec3(0.0f, -deltaY, 0.0f));
 
-                                vulkanExample->touchPoints[0].x = eventX;
-                                vulkanExample->touchPoints[0].y = eventY;
-                            }
-                        }
+								vulkanExample->touchPoints[0].x = eventX;
+								vulkanExample->touchPoints[0].y = eventY;
+							}
+						}
 						break;
 					}
 					default:
@@ -1237,7 +1187,6 @@ void VulkanExampleBase::pointerAxis(wl_pointer *pointer, uint32_t time,
 	{
 	case REL_X:
 		camera.translate(glm::vec3(0.0f, 0.0f, -d * 0.005f * camera.movementSpeed));
-		viewUpdated = true;
 		break;
 	default:
 		break;
@@ -1421,8 +1370,7 @@ wl_shell_surface *VulkanExampleBase::setupWindow()
 
 	wl_shell_surface_add_listener(shell_surface, &shell_surface_listener, this);
 	wl_shell_surface_set_toplevel(shell_surface);
-	std::string windowTitle = getWindowTitle();
-	wl_shell_surface_set_title(shell_surface, windowTitle.c_str());
+	wl_shell_surface_set_title(shell_surface, title.c_str());
 	return shell_surface;
 }
 
@@ -1474,10 +1422,9 @@ xcb_window_t VulkanExampleBase::setupWindow()
 		window, (*reply).atom, 4, 32, 1,
 		&(*atom_wm_delete_window).atom);
 
-	std::string windowTitle = getWindowTitle();
 	xcb_change_property(connection, XCB_PROP_MODE_REPLACE,
 		window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8,
-		title.size(), windowTitle.c_str());
+		title.size(), title.c_str());
 
 	free(reply);
 
@@ -1856,15 +1803,12 @@ void VulkanExampleBase::handleMouseMove(int32_t x, int32_t y)
 
 	if (mouseButtons.left) {
 		camera.rotate(glm::vec3(dy * camera.rotationSpeed, -dx * camera.rotationSpeed, 0.0f));
-		viewUpdated = true;
 	}
 	if (mouseButtons.right) {
 		camera.translate(glm::vec3(-0.0f, 0.0f, dy * .005f * camera.movementSpeed));
-		viewUpdated = true;
 	}
 	if (mouseButtons.middle) {
 		camera.translate(glm::vec3(-dx * 0.01f, -dy * 0.01f, 0.0f));
-		viewUpdated = true;
 	}
 	mousePos = glm::vec2((float)x, (float)y);
 }

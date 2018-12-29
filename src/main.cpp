@@ -1777,7 +1777,8 @@ public:
 			}
 
 			ui->text("Vulkan glTF 2.0 PBR");
-			ImGui::Text("%.1d fps (%.2f ms)", lastFPS, (1000.0f / lastFPS));
+			ui->text(deviceProperties.deviceName);
+			ui->text("%.1d fps (%.2f ms)", lastFPS, (1000.0f / lastFPS));
 
 			if (ui->header("Environment")) {
 				if (ui->checkbox("Background", &displayBackground)) {
