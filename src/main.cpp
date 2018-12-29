@@ -153,6 +153,9 @@ public:
 	std::map<std::string, std::string> environments;
 	std::string selectedEnvironment = "papermill";
 
+	std::map<std::string, std::string> scenes;
+	std::string selectedScene = "DamagedHelmet";
+
 	VulkanExample() : VulkanExampleBase()
 	{
 		title = "Vulkan glTF 2.0 PBR";
@@ -333,6 +336,19 @@ public:
 		}
 	}
 
+	void loadScene(std::string filename)
+	{
+		std::cout << "Loading scene from " << filename << std::endl;
+		models.scene.destroy(device);
+		animationIndex = 0;
+		animationTimer = 0.0f;
+		models.scene.loadFromFile(filename, vulkanDevice, queue);
+		// Scale and center model to fit into viewport
+		scale = 1.0f / models.scene.dimensions.radius;
+		camera.setPosition(glm::vec3(-models.scene.dimensions.center.x * scale, -models.scene.dimensions.center.y * scale, camera.position.z));
+		shaderValuesScene.flipUV = std::string(filename).find("DamagedHelmet") != std::string::npos;
+	}
+
 	void loadEnvironment(std::string filename)
 	{
 		std::cout << "Loading environment from " << filename << std::endl;
@@ -359,18 +375,17 @@ public:
 		}
 #endif
 		readDirectory(assetpath + "environments", "*.ktx", environments, false);
+		readDirectory(assetpath + "models", "*.gltf", scenes, true);
 
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 
 		std::string sceneFile = assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf";
 		std::string envMapFile = assetpath + "environments/papermill.ktx";
-		shaderValuesScene.flipUV = 1.0f;
 		for (size_t i = 0; i < args.size(); i++) {
 			if (std::string(args[i]).find(".gltf") != std::string::npos) {
 				std::ifstream file(args[i]);
 				if (file.good()) {
 					sceneFile = args[i];
-					shaderValuesScene.flipUV = 0.0f;
 				} else {
 					std::cout << "could not load \"" << args[i] << "\"" << std::endl;
 				}
@@ -386,14 +401,10 @@ public:
 			}
 		}
 
-		models.scene.loadFromFile(sceneFile, vulkanDevice, queue);
+		loadScene(sceneFile.c_str());
 		models.skybox.loadFromFile(assetpath + "models/Box/glTF-Embedded/Box.gltf", vulkanDevice, queue);
 
 		loadEnvironment(envMapFile.c_str());
-
-		// Scale and center model to fit into viewport
-		scale = 1.0f / models.scene.dimensions.radius;
-		camera.setPosition(glm::vec3(-models.scene.dimensions.center.x * scale, -models.scene.dimensions.center.y * scale, camera.position.z));
 	}
 
 	void setupNodeDescriptorSet(vkglTF::Node *node) {
@@ -1832,11 +1843,18 @@ public:
 				};
 			}
 
-			if (ui->header("Scene")) {
+			if (ui->header("Files")) {
 				ui->text("Environment");
 				if (ui->combo("##environment", selectedEnvironment, environments)) {
 					vkDeviceWaitIdle(device);
 					loadEnvironment(environments[selectedEnvironment]);
+					setupDescriptors();
+					updateCBs = true;
+				}
+				ui->text("Scene");
+				if (ui->combo("##scene", selectedScene, scenes)) {
+					vkDeviceWaitIdle(device);
+					loadScene(scenes[selectedScene]);
 					setupDescriptors();
 					updateCBs = true;
 				}
