@@ -38,6 +38,17 @@ namespace vkglTF
 	struct Node;
 
 	/*
+		glTF texture sampler		
+	*/
+	struct TextureSampler {
+		VkFilter magFilter;
+		VkFilter minFilter;
+		VkSamplerAddressMode addressModeU;
+		VkSamplerAddressMode addressModeV;
+		VkSamplerAddressMode addressModeW;
+	};
+
+	/*
 		glTF texture loading class
 	*/
 	struct Texture {
@@ -71,7 +82,7 @@ namespace vkglTF
 			Load a texture from a glTF image (stored as vector of chars loaded via stb_image)
 			Also generates the mip chain as glTF images are stored as jpg or png without any mips
 		*/
-		void fromglTfImage(tinygltf::Image &gltfimage, vks::VulkanDevice *device, VkQueue copyQueue)
+		void fromglTfImage(tinygltf::Image &gltfimage, TextureSampler textureSampler, vks::VulkanDevice *device, VkQueue copyQueue)
 		{
 			this->device = device;
 
@@ -273,12 +284,12 @@ namespace vkglTF
 
 			VkSamplerCreateInfo samplerInfo{};
 			samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-			samplerInfo.magFilter = VK_FILTER_LINEAR;
-			samplerInfo.minFilter = VK_FILTER_LINEAR;
+			samplerInfo.magFilter = textureSampler.magFilter;
+			samplerInfo.minFilter = textureSampler.minFilter;
 			samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-			samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-			samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-			samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+			samplerInfo.addressModeU = textureSampler.addressModeU;
+			samplerInfo.addressModeV = textureSampler.addressModeV;
+			samplerInfo.addressModeW = textureSampler.addressModeW;
 			samplerInfo.compareOp = VK_COMPARE_OP_NEVER;
 			samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
 			samplerInfo.maxAnisotropy = 1.0;
@@ -541,6 +552,7 @@ namespace vkglTF
 		std::vector<Skin*> skins;
 
 		std::vector<Texture> textures;
+		std::vector<TextureSampler> textureSamplers;
 		std::vector<Material> materials;
 		std::vector<Animation> animations;
 		std::vector<std::string> extensions;
@@ -567,6 +579,7 @@ namespace vkglTF
 				texture.destroy();
 			}
 			textures.resize(0);
+			textureSamplers.resize(0);
 			for (auto node : nodes) {
 				delete node;
 			}
@@ -769,12 +782,68 @@ namespace vkglTF
 			}
 		}
 
-		void loadImages(tinygltf::Model &gltfModel, vks::VulkanDevice *device, VkQueue transferQueue)
+		void loadTextures(tinygltf::Model &gltfModel, vks::VulkanDevice *device, VkQueue transferQueue)
 		{
-			for (tinygltf::Image &image : gltfModel.images) {
+			for (tinygltf::Texture &tex : gltfModel.textures) {
+				tinygltf::Image image = gltfModel.images[tex.source];
+				vkglTF::TextureSampler textureSampler;
+				if (tex.sampler == -1) {
+					// No sampler specified, use a default one
+					textureSampler.magFilter = VK_FILTER_LINEAR;
+					textureSampler.minFilter = VK_FILTER_LINEAR;
+					textureSampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+					textureSampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+					textureSampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+				}
+				else {
+					textureSampler = textureSamplers[tex.sampler];
+				}
 				vkglTF::Texture texture;
-				texture.fromglTfImage(image, device, transferQueue);
+				texture.fromglTfImage(image, textureSampler, device, transferQueue);
 				textures.push_back(texture);
+			}
+		}
+
+		VkSamplerAddressMode getVkWrapMode(int32_t wrapMode) 
+		{
+			switch (wrapMode) {
+			case 10497:
+				return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			case 33071:
+				return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+			case 33648:
+				return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+			}
+		}
+
+		VkFilter getVkFilterMode(int32_t filterMode) 
+		{
+			switch (filterMode) {
+			case 9728:
+				return VK_FILTER_NEAREST;
+			case 9729:
+				return VK_FILTER_LINEAR;
+			case 9984:
+				return VK_FILTER_NEAREST;
+			case 9985:
+				return VK_FILTER_NEAREST;
+			case 9986:
+				return VK_FILTER_LINEAR;
+			case 9987:
+				return VK_FILTER_LINEAR;
+			}
+		}
+
+		void loadTextureSamplers(tinygltf::Model &gltfModel)
+		{
+			for (tinygltf::Sampler smpl : gltfModel.samplers) {
+				vkglTF::TextureSampler sampler{};
+				sampler.minFilter = getVkFilterMode(smpl.minFilter);
+				sampler.magFilter = getVkFilterMode(smpl.magFilter);
+				sampler.addressModeU = getVkWrapMode(smpl.wrapS);
+				sampler.addressModeV = getVkWrapMode(smpl.wrapT);
+				sampler.addressModeW = sampler.addressModeV;
+				textureSamplers.push_back(sampler);
 			}
 		}
 
@@ -978,7 +1047,7 @@ namespace vkglTF
 			this->device = device;
 
 #if defined(__ANDROID__)
-            bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
+			bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
 #else
 			bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
 #endif
@@ -986,7 +1055,8 @@ namespace vkglTF
 			std::vector<Vertex> vertexBuffer;
 
 			if (fileLoaded) {
-				loadImages(gltfModel, device, transferQueue);
+				loadTextureSamplers(gltfModel);
+				loadTextures(gltfModel, device, transferQueue);
 				loadMaterials(gltfModel);
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
