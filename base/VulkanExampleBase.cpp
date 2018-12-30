@@ -1033,24 +1033,6 @@ int32_t VulkanExampleBase::handleAppInput(struct android_app* app, AInputEvent* 
 
 		switch (keyCode)
 		{
-		case AKEYCODE_BUTTON_A:
-			vulkanExample->keyPressed(GAMEPAD_BUTTON_A);
-			break;
-		case AKEYCODE_BUTTON_B:
-			vulkanExample->keyPressed(GAMEPAD_BUTTON_B);
-			break;
-		case AKEYCODE_BUTTON_X:
-			vulkanExample->keyPressed(GAMEPAD_BUTTON_X);
-			break;
-		case AKEYCODE_BUTTON_Y:
-			vulkanExample->keyPressed(GAMEPAD_BUTTON_Y);
-			break;
-		case AKEYCODE_BUTTON_L1:
-			vulkanExample->keyPressed(GAMEPAD_BUTTON_L1);
-			break;
-		case AKEYCODE_BUTTON_R1:
-			vulkanExample->keyPressed(GAMEPAD_BUTTON_R1);
-			break;
 		case AKEYCODE_BUTTON_START:
 			vulkanExample->paused = !vulkanExample->paused;
 			break;
