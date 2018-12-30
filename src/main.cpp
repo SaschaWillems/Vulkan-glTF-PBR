@@ -64,7 +64,6 @@ public:
 		glm::mat4 model;
 		glm::mat4 view;
 		glm::vec3 camPos;
-		float flipUV = 0.0f;
 	} shaderValuesScene, shaderValuesSkybox;
 
 	struct shaderValuesParams {
@@ -254,7 +253,7 @@ public:
 		}
 	}
 
-	void buildCommandBuffers()
+	void recordCommandBuffers()
 	{
 		VkCommandBufferBeginInfo cmdBufferBeginInfo{};
 		cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -346,7 +345,6 @@ public:
 		// Scale and center model to fit into viewport
 		scale = 1.0f / models.scene.dimensions.radius;
 		camera.setPosition(glm::vec3(-models.scene.dimensions.center.x * scale, -models.scene.dimensions.center.y * scale, camera.position.z));
-		shaderValuesScene.flipUV = std::string(filename).find("DamagedHelmet") != std::string::npos;
 	}
 
 	void loadEnvironment(std::string filename)
@@ -1660,6 +1658,7 @@ public:
 
 	void windowResized()
 	{
+		recordCommandBuffers();
 		vkDeviceWaitIdle(device);
 		updateUniformBuffers();
 		updateOverlay();
@@ -1717,7 +1716,7 @@ public:
 		ui = new UI(vulkanDevice, renderPass, queue, pipelineCache, settings.sampleCount);
 		updateOverlay();
 
-		buildCommandBuffers();
+		recordCommandBuffers();
 
 		prepared = true;
 	}
@@ -1918,7 +1917,7 @@ public:
 
 		if (updateCBs) {
 			vkDeviceWaitIdle(device);
-			buildCommandBuffers();
+			recordCommandBuffers();
 			vkDeviceWaitIdle(device);
 		}
 

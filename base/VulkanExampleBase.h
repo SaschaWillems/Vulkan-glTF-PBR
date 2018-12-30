@@ -233,8 +233,6 @@ public:
 	virtual VkResult createInstance(bool enableValidation);
 	virtual void render() = 0;
 	virtual void windowResized();
-	virtual void keyPressed(uint32_t);
-	virtual void buildCommandBuffers();
 	virtual void setupFrameBuffer();
 	virtual void prepare();
 

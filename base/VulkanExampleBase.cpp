@@ -841,7 +841,6 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 			}
 		}
 
-		keyPressed((uint32_t)wParam);
 		break;
 	case WM_KEYUP:
 		if (camera.firstperson)
@@ -1578,10 +1577,6 @@ void VulkanExampleBase::handleEvent(const xcb_generic_event_t *event)
 
 void VulkanExampleBase::windowResized() {}
 
-void VulkanExampleBase::keyPressed(uint32_t) {}
-
-void VulkanExampleBase::buildCommandBuffers() {}
-
 void VulkanExampleBase::setupFrameBuffer()
 {
 	/*
@@ -1774,7 +1769,6 @@ void VulkanExampleBase::windowResize()
 		vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
 	}
 	setupFrameBuffer();
-	buildCommandBuffers();
 	vkDeviceWaitIdle(device);
 
 	camera.updateAspectRatio((float)width / (float)height);
