@@ -852,10 +852,10 @@ namespace vkglTF
 			for (tinygltf::Material &mat : gltfModel.materials) {
 				vkglTF::Material material{};
 				if (mat.values.find("baseColorTexture") != mat.values.end()) {
-					material.baseColorTexture = &textures[gltfModel.textures[mat.values["baseColorTexture"].TextureIndex()].source];
+					material.baseColorTexture = &textures[mat.values["baseColorTexture"].TextureIndex()];
 				}
 				if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
-					material.metallicRoughnessTexture = &textures[gltfModel.textures[mat.values["metallicRoughnessTexture"].TextureIndex()].source];
+					material.metallicRoughnessTexture = &textures[mat.values["metallicRoughnessTexture"].TextureIndex()];
 				}
 				if (mat.values.find("roughnessFactor") != mat.values.end()) {
 					material.roughnessFactor = static_cast<float>(mat.values["roughnessFactor"].Factor());
@@ -867,13 +867,13 @@ namespace vkglTF
 					material.baseColorFactor = glm::make_vec4(mat.values["baseColorFactor"].ColorFactor().data());
 				}				
 				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
-					material.normalTexture = &textures[gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source];
+					material.normalTexture = &textures[mat.additionalValues["normalTexture"].TextureIndex()];
 				}
 				if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
-					material.emissiveTexture = &textures[gltfModel.textures[mat.additionalValues["emissiveTexture"].TextureIndex()].source];
+					material.emissiveTexture = &textures[mat.additionalValues["emissiveTexture"].TextureIndex()];
 				}
 				if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
-					material.occlusionTexture = &textures[gltfModel.textures[mat.additionalValues["occlusionTexture"].TextureIndex()].source];
+					material.occlusionTexture = &textures[mat.additionalValues["occlusionTexture"].TextureIndex()];
 				}
 				if (mat.additionalValues.find("alphaMode") != mat.additionalValues.end()) {
 					tinygltf::Parameter param = mat.additionalValues["alphaMode"];
@@ -898,12 +898,12 @@ namespace vkglTF
 					auto ext = mat.extensions.find("KHR_materials_pbrSpecularGlossiness");
 					if (ext->second.Has("specularGlossinessTexture")) {
 						auto index = ext->second.Get("specularGlossinessTexture").Get("index");
-						material.extension.specularGlossinessTexture = &textures[gltfModel.textures[index.Get<int>()].source];
+						material.extension.specularGlossinessTexture = &textures[index.Get<int>()];
 						material.pbrWorkflows.specularGlossiness = true;
 					}
 					if (ext->second.Has("diffuseTexture")) {
 						auto index = ext->second.Get("diffuseTexture").Get("index");
-						material.extension.diffuseTexture = &textures[gltfModel.textures[index.Get<int>()].source];
+						material.extension.diffuseTexture = &textures[index.Get<int>()];
 					}
 					if (ext->second.Has("diffuseFactor")) {
 						auto factor = ext->second.Get("diffuseFactor");

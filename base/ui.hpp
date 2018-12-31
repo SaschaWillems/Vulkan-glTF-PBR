@@ -81,7 +81,7 @@ public:
 		style.WindowMinSize = ImVec2(5.0f, 5.0f);
 		style.WindowRounding = 0.0f;
 		style.FrameRounding = 2.0f;	
-		style.WindowPadding = ImVec2(0.0f, 0.0f);
+		style.WindowPadding = ImVec2(0.0f, 5.0f);
 		style.ColumnsMinSpacing = 0.0f;
 		style.FrameBorderSize = 0.0f;
 		style.WindowBorderSize = 0.0f;
