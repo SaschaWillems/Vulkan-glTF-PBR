@@ -735,8 +735,8 @@ namespace vkglTF
 							std::cerr << "Index component type " << accessor.componentType << " not supported!" << std::endl;
 							return;
 						}
-					}
-					Primitive *newPrimitive = new Primitive(indexStart, indexCount, materials[primitive.material]);
+					}					
+					Primitive *newPrimitive = new Primitive(indexStart, indexCount, primitive.material > -1 ? materials[primitive.material] : materials.back());
 					newPrimitive->setDimensions(posMin, posMax);
 					newMesh->primitives.push_back(newPrimitive);
 				}
@@ -924,6 +924,8 @@ namespace vkglTF
 
 				materials.push_back(material);
 			}
+			// Push a default material at the end of the list for meshes with no material assigned
+			materials.push_back(Material());
 		}
 
 		void loadAnimations(tinygltf::Model &gltfModel)
