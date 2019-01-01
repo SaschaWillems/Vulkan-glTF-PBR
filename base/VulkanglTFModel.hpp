@@ -1061,7 +1061,8 @@ namespace vkglTF
 				loadTextureSamplers(gltfModel);
 				loadTextures(gltfModel, device, transferQueue);
 				loadMaterials(gltfModel);
-				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
+				// TODO: scene handling with no default scene
+				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene > -1 ? gltfModel.defaultScene : 0];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
 					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
 					loadNode(nullptr, node, scene.nodes[i], gltfModel, indexBuffer, vertexBuffer, scale);
