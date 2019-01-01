@@ -317,12 +317,13 @@ public:
 			for (auto node : model.nodes) {
 				renderNode(node, i, vkglTF::Material::ALPHAMODE_OPAQUE);
 			}
-			// Transparent last
-			// TODO: Correct depth sorting
-			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrAlphaBlend);
+			// Alpha masked primitives
 			for (auto node : model.nodes) {
 				renderNode(node, i, vkglTF::Material::ALPHAMODE_MASK);
 			}
+			// Transparent primitives
+			// TODO: Correct depth sorting
+			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrAlphaBlend);
 			for (auto node : model.nodes) {
 				renderNode(node, i, vkglTF::Material::ALPHAMODE_BLEND);
 			}

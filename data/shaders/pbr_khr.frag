@@ -225,6 +225,17 @@ void main()
 
 	vec3 f0 = vec3(0.04);
 
+	if (material.alphaMask == 1.0f) {
+		if (material.hasBaseColorTexture == 1.0f) {
+			baseColor = SRGBtoLINEAR(texture(colorMap, inUV)) * material.baseColorFactor;
+		} else {
+			baseColor = material.baseColorFactor;
+		}
+		if (baseColor.a < material.alphaMaskCutoff) {
+			discard;
+		}
+	}
+
 	if (material.workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS) {
 		// Metallic and Roughness material properties are packed together
 		// In glTF, these factors can be specified by fixed scalar values

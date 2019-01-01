@@ -881,6 +881,7 @@ namespace vkglTF
 						material.alphaMode = Material::ALPHAMODE_BLEND;
 					}
 					if (param.string_value == "MASK") {
+						material.alphaCutoff = 0.5f;
 						material.alphaMode = Material::ALPHAMODE_MASK;
 					}
 				}
