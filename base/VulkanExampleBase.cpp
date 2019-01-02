@@ -1224,9 +1224,6 @@ void VulkanExampleBase::keyboardKey(struct wl_keyboard *keyboard,
 		quit = true;
 		break;
 	}
-
-	if (state)
-		keyPressed(key);
 }
 
 /*static*/void VulkanExampleBase::keyboardModifiersCb(void *data,
@@ -1531,7 +1528,6 @@ void VulkanExampleBase::handleEvent(const xcb_generic_event_t *event)
 				quit = true;
 				break;
 		}
-		keyPressed(keyEvent->detail);
 	}
 	break;
 	case XCB_DESTROY_NOTIFY:
