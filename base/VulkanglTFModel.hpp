@@ -96,7 +96,7 @@ namespace vkglTF
 				buffer = new unsigned char[bufferSize];
 				unsigned char* rgba = buffer;
 				unsigned char* rgb = &gltfimage.image[0];
-				for (size_t i = 0; i< gltfimage.width * gltfimage.height; ++i) {
+				for (int32_t i = 0; i< gltfimage.width * gltfimage.height; ++i) {
 					for (int32_t j = 0; j < 3; ++j) {
 						rgba[j] = rgb[j];
 					}
@@ -313,6 +313,10 @@ namespace vkglTF
 			descriptor.sampler = sampler;
 			descriptor.imageView = view;
 			descriptor.imageLayout = imageLayout;
+
+			if (deleteBuffer)
+				delete[] buffer;
+
 		}
 	};
 
@@ -411,6 +415,8 @@ namespace vkglTF
 		~Mesh() {
 			vkDestroyBuffer(device->logicalDevice, uniformBuffer.buffer, nullptr);
 			vkFreeMemory(device->logicalDevice, uniformBuffer.memory, nullptr);
+			for (Primitive* p : primitives)
+				delete p;
 		}
 
 	};
@@ -462,13 +468,14 @@ namespace vkglTF
 					mesh->uniformBlock.matrix = m;
 					// Update join matrices
 					glm::mat4 inverseTransform = glm::inverse(m);
-					for (size_t i = 0; i < skin->joints.size(); i++) {
+					size_t numJoints = std::min(skin->joints.size(), 64U);
+					for (size_t i = 0; i < numJoints; i++) {
 						vkglTF::Node *jointNode = skin->joints[i];
 						glm::mat4 jointMat = jointNode->getMatrix() * skin->inverseBindMatrices[i];
 						jointMat = inverseTransform * jointMat;
 						mesh->uniformBlock.jointMatrix[i] = jointMat;
 					}
-					mesh->uniformBlock.jointcount = (float)skin->joints.size();
+					mesh->uniformBlock.jointcount = (float)numJoints;
 					memcpy(mesh->uniformBuffer.mapped, &mesh->uniformBlock, sizeof(mesh->uniformBlock));
 				} else {
 					memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
@@ -622,7 +629,7 @@ namespace vkglTF
 
 			// Node with children
 			if (node.children.size() > 0) {
-				for (auto i = 0; i < node.children.size(); i++) {
+				for (size_t i = 0; i < node.children.size(); i++) {
 					loadNode(newNode, model.nodes[node.children[i]], node.children[i], model, indexBuffer, vertexBuffer, globalscale);
 				}
 			}
@@ -705,27 +712,25 @@ namespace vkglTF
 						const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
 
 						indexCount = static_cast<uint32_t>(accessor.count);
+						const void *dataPtr = &(buffer.data[accessor.byteOffset + bufferView.byteOffset]);
 
 						switch (accessor.componentType) {
 						case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
-							uint32_t *buf = new uint32_t[accessor.count];
-							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint32_t));
+							const uint32_t *buf = static_cast<const uint32_t*>(dataPtr);
 							for (size_t index = 0; index < accessor.count; index++) {
 								indexBuffer.push_back(buf[index] + vertexStart);
 							}
 							break;
 						}
 						case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT: {
-							uint16_t *buf = new uint16_t[accessor.count];
-							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint16_t));
+							const uint16_t *buf = static_cast<const uint16_t*>(dataPtr);
 							for (size_t index = 0; index < accessor.count; index++) {
 								indexBuffer.push_back(buf[index] + vertexStart);
 							}
 							break;
 						}
 						case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE: {
-							uint8_t *buf = new uint8_t[accessor.count];
-							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint8_t));
+							const uint8_t *buf = static_cast<const uint8_t*>(dataPtr);
 							for (size_t index = 0; index < accessor.count; index++) {
 								indexBuffer.push_back(buf[index] + vertexStart);
 							}
@@ -959,8 +964,8 @@ namespace vkglTF
 
 						assert(accessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT);
 
-						float *buf = new float[accessor.count];
-						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(float));
+						const void *dataPtr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
+						const float *buf = static_cast<const float*>(dataPtr);
 						for (size_t index = 0; index < accessor.count; index++) {
 							sampler.inputs.push_back(buf[index]);
 						}
@@ -983,18 +988,18 @@ namespace vkglTF
 
 						assert(accessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT);
 
+						const void *dataPtr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
+
 						switch (accessor.type) {
 						case TINYGLTF_TYPE_VEC3: {
-							glm::vec3 *buf = new glm::vec3[accessor.count];
-							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(glm::vec3));
+							const glm::vec3 *buf = static_cast<const glm::vec3*>(dataPtr);
 							for (size_t index = 0; index < accessor.count; index++) {
 								sampler.outputsVec4.push_back(glm::vec4(buf[index], 0.0f));
 							}
 							break;
 						}
 						case TINYGLTF_TYPE_VEC4: {
-							glm::vec4 *buf = new glm::vec4[accessor.count];
-							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(glm::vec4));
+							const glm::vec4 *buf = static_cast<const glm::vec4*>(dataPtr);
 							for (size_t index = 0; index < accessor.count; index++) {
 								sampler.outputsVec4.push_back(buf[index]);
 							}
@@ -1225,7 +1230,7 @@ namespace vkglTF
 					continue;
 				}
 
-				for (auto i = 0; i < sampler.inputs.size() - 1; i++) {
+				for (size_t i = 0; i < sampler.inputs.size() - 1; i++) {
 					if ((time >= sampler.inputs[i]) && (time <= sampler.inputs[i + 1])) {
 						float u = std::max(0.0f, time - sampler.inputs[i]) / (sampler.inputs[i + 1] - sampler.inputs[i]);
 						if (u <= 1.0f) {
