@@ -468,7 +468,7 @@ namespace vkglTF
 					mesh->uniformBlock.matrix = m;
 					// Update join matrices
 					glm::mat4 inverseTransform = glm::inverse(m);
-					size_t numJoints = std::min(skin->joints.size(), 64U);
+					size_t numJoints = std::min((uint32_t)skin->joints.size(), 64U);
 					for (size_t i = 0; i < numJoints; i++) {
 						vkglTF::Node *jointNode = skin->joints[i];
 						glm::mat4 jointMat = jointNode->getMatrix() * skin->inverseBindMatrices[i];
