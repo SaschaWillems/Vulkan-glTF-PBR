@@ -1054,11 +1054,14 @@ namespace vkglTF
 
 			this->device = device;
 
-#if defined(__ANDROID__)
-			bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
-#else
-			bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
-#endif
+			bool binary = false;
+			size_t extpos = filename.rfind('.', filename.length());
+			if (extpos != std::string::npos) {
+				binary = (filename.substr(extpos + 1, filename.length() - extpos) == "glb");
+			}  
+
+			bool fileLoaded = binary ? gltfContext.LoadBinaryFromFile(&gltfModel, &error, &warning, filename.c_str()) : gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
+
 			std::vector<uint32_t> indexBuffer;
 			std::vector<Vertex> vertexBuffer;
 
