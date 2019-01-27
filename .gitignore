@@ -238,3 +238,4 @@ android/**/.apk
 
 libs/draco/*.lib
 external/draco/*
+!external/draco/README.md
