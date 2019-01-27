@@ -235,3 +235,6 @@ android/local.properties
 android/project.properties
 android/proguard-project.txt
 android/**/.apk
+
+libs/draco/*.lib
+external/draco/*

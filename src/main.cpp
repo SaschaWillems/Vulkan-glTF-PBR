@@ -33,7 +33,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-
 /*
 	PBR example main class
 */
@@ -158,6 +157,9 @@ public:
 	VulkanExample() : VulkanExampleBase()
 	{
 		title = "Vulkan glTF 2.0 PBR";
+#if defined(TINYGLTF_ENABLE_DRACO)
+		std::cout << "Draco mesh compression is enabled" << std::endl;
+#endif
 	}
 
 	~VulkanExample()
@@ -1859,6 +1861,28 @@ public:
 					setupDescriptors();
 					updateCBs = true;
 				}
+#if defined(_WIN32)
+				if (ui->button("Load from file")) {
+					char filename[MAX_PATH];
+
+					OPENFILENAME ofn;
+					ZeroMemory(&filename, sizeof(filename));
+					ZeroMemory(&ofn, sizeof(ofn));
+					ofn.lStructSize = sizeof(ofn);
+					ofn.lpstrFilter = "glTF files\0*.gltf;*.glb\0";
+					ofn.lpstrFile = filename;
+					ofn.nMaxFile = MAX_PATH;
+					ofn.lpstrTitle = "Select a glTF file to load";
+					ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
+
+					if (GetOpenFileNameA(&ofn)) {
+						vkDeviceWaitIdle(device);
+						loadScene(filename);
+						setupDescriptors();
+						updateCBs = true;
+					}
+				}
+#endif
 				if (models.scene.animations.size() > 0) {
 					if (ui->header("Animations")) {
 						ui->checkbox("Animate", &animate);

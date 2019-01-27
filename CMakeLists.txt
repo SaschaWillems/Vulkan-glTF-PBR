@@ -18,6 +18,20 @@ OPTION(USE_WAYLAND_WSI "Build the project using Wayland swapchain" OFF)
 
 set(RESOURCE_INSTALL_DIR "" CACHE PATH "Path to install resources to (leave empty for running uninstalled)")
 
+# Enable Draco mesh compression if source and library are present
+IF(EXISTS ${CMAKE_SOURCE_DIR}/external/draco/draco_features.h)
+  message(STATUS "Draco source and library found at " ${CMAKE_SOURCE_DIR}/external/draco)
+  add_definitions(-DTINYGLTF_ENABLE_DRACO)
+  include_directories(external/draco)
+  find_library(DRACO_DECODER_LIBRARY NAMES dracodec PATHS ${CMAKE_SOURCE_DIR}/libs/draco REQUIRED)
+  IF (EXISTS ${DRACO_DECODER_LIBRARY})
+	message(STATUS "Draco decoder library found at " ${DRACO_DECODER_LIBRARY})
+	message(STATUS "Draco mesh compression enabled")
+  ELSE()
+    message(FATAL_ERROR "Draco decoder library not found!")
+  ENDIF()
+ENDIF()
+
 # Use FindVulkan module added with CMAKE 3.7
 if (NOT CMAKE_VERSION VERSION_LESS 3.7.0)
 	message(STATUS "Using module to find Vulkan")

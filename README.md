@@ -23,6 +23,7 @@ The following major glTF 2.0 features are currently supported by the [vkglTF::Mo
         * [x] Articulated (translate, rotate, scale)
         * [x] Skinned (up to 64 joints per skin)
         * [ ] Morph targets
+    * [x] Support for Draco mesh compression ([see instructions](#how-to-enable-draco-mesh-compression))
 
 Note that the model loader does not fully implement all aspects of the glTF 2.0 standard, and as such there is no guarantee that all glTF 2.0 models work properly.
 
@@ -119,6 +120,12 @@ make
 - Select the ```android``` sub folder of the repository
 - Once import has finished the project can be build, run and debugged from Android Studio
 
+## How to enable Draco mesh compression
+In order to enable support for loading Draco compressed glTF files you need to:
+- Clone and build https://github.com/google/draco as per their [build instructions](https://github.com/google/draco#building)
+- Copy the Draco decoder library ```dracodec.lib``` into ```libs\draco```
+- Copy the ```src``` folder contents into ```external\draco```, make sure the ```draco_features.h``` is also present
+- If everything is in place, running CMake will output ```Draco mesh compression enabled``` and loading Draco compressed meshes will work out of the box
 
 ## Links
 * [glTF format specification](https://github.com/KhronosGroup/glTF)

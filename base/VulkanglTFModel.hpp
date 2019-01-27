@@ -23,6 +23,12 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <gli/gli.hpp>
 
+// ERROR is already defined in wingdi.h and collides with a define in the Draco headers
+#if defined(_WIN32) && defined(ERROR) && defined(TINYGLTF_ENABLE_DRACO) 
+#undef ERROR
+#pragma message ("ERROR constant already defined, undefining")
+#endif
+
 #define TINYGLTF_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #define STB_IMAGE_IMPLEMENTATION
