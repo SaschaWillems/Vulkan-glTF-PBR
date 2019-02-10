@@ -109,7 +109,6 @@ public:
 	float animationTimer = 0.0f;
 	bool animate = true;
 
-	float scale = 1.0f;
 	bool displayBackground = true;
 	
 	struct LightSource {
@@ -345,9 +344,8 @@ public:
 		animationIndex = 0;
 		animationTimer = 0.0f;
 		models.scene.loadFromFile(filename, vulkanDevice, queue);
-		// Scale and center model to fit into viewport
-		scale = 1.0f / models.scene.dimensions.radius;
-		camera.setPosition(glm::vec3(-models.scene.dimensions.center.x * scale, -models.scene.dimensions.center.y * scale, camera.position.z));
+		camera.setPosition({ 0.0f, 0.0f, 1.0f });
+		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 	}
 
 	void loadEnvironment(std::string filename)
@@ -1629,14 +1627,18 @@ public:
 	{
 		// Scene
 		shaderValuesScene.projection = camera.matrices.perspective;
-
 		shaderValuesScene.view = camera.matrices.view;
 		
-		shaderValuesScene.model = glm::translate(glm::mat4(1.0f), modelPos);
-		shaderValuesScene.model = glm::rotate(shaderValuesScene.model, glm::radians(modelrot.x), glm::vec3(1.0f, 0.0f, 0.0f));
-		shaderValuesScene.model = glm::rotate(shaderValuesScene.model, glm::radians(modelrot.y), glm::vec3(0.0f, 1.0f, 0.0f));
-		shaderValuesScene.model = glm::rotate(shaderValuesScene.model, glm::radians(modelrot.z), glm::vec3(0.0f, 0.0f, 1.0f));
-		shaderValuesScene.model = glm::scale(shaderValuesScene.model, glm::vec3(scale));
+		// Center and scale model
+		float scale = (1.0f / std::max(models.scene.aabb[0][0], std::max(models.scene.aabb[1][1], models.scene.aabb[2][2]))) * 0.5f;
+		glm::vec3 translate = -glm::vec3(models.scene.aabb[3][0], models.scene.aabb[3][1], models.scene.aabb[3][2]);
+		translate += -0.5f * glm::vec3(models.scene.aabb[0][0], models.scene.aabb[1][1], models.scene.aabb[2][2]);
+
+		shaderValuesScene.model = glm::mat4(1.0f);
+		shaderValuesScene.model[0][0] = scale;
+		shaderValuesScene.model[1][1] = scale;
+		shaderValuesScene.model[2][2] = scale;
+		shaderValuesScene.model = glm::translate(shaderValuesScene.model, translate);
 
 		shaderValuesScene.camPos = glm::vec3(
 			-camera.position.z * sin(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x)),
@@ -1676,7 +1678,7 @@ public:
 		camera.setPerspective(45.0f, (float)width / (float)height, 0.1f, 256.0f);
 		camera.rotationSpeed = 0.25f;
 		camera.movementSpeed = 0.1f;
-		camera.setPosition({ 0.0f, 0.0f, 2.5f });
+		camera.setPosition({ 0.0f, 0.0f, 1.0f });
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 
 		waitFences.resize(renderAhead);
