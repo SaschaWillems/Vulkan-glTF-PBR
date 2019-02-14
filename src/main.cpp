@@ -150,8 +150,10 @@ public:
 	std::map<std::string, std::string> environments;
 	std::string selectedEnvironment = "papermill";
 
+#if !defined(_WIN32)
 	std::map<std::string, std::string> scenes;
 	std::string selectedScene = "DamagedHelmet";
+#endif
 
 	VulkanExample() : VulkanExampleBase()
 	{
@@ -374,7 +376,9 @@ public:
 		}
 #endif
 		readDirectory(assetpath + "environments", "*.ktx", environments, false);
+#if !defined(_WIN32)
 		readDirectory(assetpath + "models", "*.gltf", scenes, true);
+#endif
 
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 
@@ -1849,22 +1853,8 @@ public:
 			}
 
 			if (ui->header("Files")) {
-				ui->text("Environment");
-				if (ui->combo("##environment", selectedEnvironment, environments)) {
-					vkDeviceWaitIdle(device);
-					loadEnvironment(environments[selectedEnvironment]);
-					setupDescriptors();
-					updateCBs = true;
-				}
-				ui->text("Scene");
-				if (ui->combo("##scene", selectedScene, scenes)) {
-					vkDeviceWaitIdle(device);
-					loadScene(scenes[selectedScene]);
-					setupDescriptors();
-					updateCBs = true;
-				}
 #if defined(_WIN32)
-				if (ui->button("Load from file")) {
+				if (ui->button("Load scene")) {
 					char filename[MAX_PATH];
 
 					OPENFILENAME ofn;
@@ -1884,7 +1874,22 @@ public:
 						updateCBs = true;
 					}
 				}
+#else
+				ui->text("Scene");
+				if (ui->combo("##scene", selectedScene, scenes)) {
+					vkDeviceWaitIdle(device);
+					loadScene(scenes[selectedScene]);
+					setupDescriptors();
+					updateCBs = true;
+				}
 #endif
+				ui->text("Environment");
+				if (ui->combo("##environment", selectedEnvironment, environments)) {
+					vkDeviceWaitIdle(device);
+					loadEnvironment(environments[selectedEnvironment]);
+					setupDescriptors();
+					updateCBs = true;
+				}
 				if (models.scene.animations.size() > 0) {
 					if (ui->header("Animations")) {
 						ui->checkbox("Animate", &animate);
