@@ -1865,7 +1865,7 @@ public:
 					ofn.lpstrFile = filename;
 					ofn.nMaxFile = MAX_PATH;
 					ofn.lpstrTitle = "Select a glTF file to load";
-					ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
+					ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
 					if (GetOpenFileNameA(&ofn)) {
 						vkDeviceWaitIdle(device);
