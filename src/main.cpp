@@ -1747,139 +1747,103 @@ public:
 		io.MouseDown[0] = mouseButtons.left;
 		io.MouseDown[1] = mouseButtons.right;
 
-		float scale = 1.0f;
-
-#if defined(__ANDROID__)
-		scale = (float)vks::android::screenDensity / (float)ACONFIGURATION_DENSITY_MEDIUM;
-#endif
 		ui->pushConstBlock.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);
 		ui->pushConstBlock.translate = glm::vec2(-1.0f);
 
-		const float sideBarWidth = 160.0f * scale;
-		const float collapseBarWidth = 15.0f * scale;
-		const ImVec2 collapseButtonSize = ImVec2(collapseBarWidth, 50.0f * scale);
 		bool updateShaderParams = false;
 		bool updateCBs = false;
 
 		ImGui::NewFrame();
 
-		const float left = width - (ui->collapsed ? collapseBarWidth : sideBarWidth);
-		ImGui::SetNextWindowPos(ImVec2(left, 0));
-		ImGui::SetNextWindowSize(ImVec2(ui->collapsed ? collapseBarWidth : sideBarWidth, height), ImGuiSetCond_Always);
-		ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysUseWindowPadding);
+		ImGui::SetNextWindowPos(ImVec2(10, 10));
+		ImGui::SetNextWindowSize(ImVec2(200, models.scene.animations.size() > 0 ? 425 : 350), ImGuiSetCond_Always);
+		ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+		ImGui::PushItemWidth(100.0f);
 
-		ImGui::Columns(2, "settings", false);
-		ImGui::SetColumnWidth(0, collapseBarWidth);
-		ImGui::SetColumnOffset(0, 0);
-		ImGui::SetCursorPosY((float)height / 2.0f - collapseButtonSize.y / 2.0f);
-		if (ImGui::Button(ui->collapsed ? "<" : ">", ImVec2(collapseButtonSize))) {
-			ui->collapsed = !ui->collapsed;
-		}
-		ImGui::SetCursorPosY(0.0f);
-		ImGui::NextColumn();
+		ui->text("%.1d fps (%.2f ms)", lastFPS, (1000.0f / lastFPS));
 
-		if (!ui->collapsed) {
-
-			bool metallicRoughnessWorkflow = true;
-			for (auto extension : models.scene.extensions) {
-				if (extension == "KHR_materials_pbrSpecularGlossiness") {
-					metallicRoughnessWorkflow = false;
-				}
-			}
-
-			ui->text("Vulkan glTF 2.0 PBR");
-			ui->text(deviceProperties.deviceName);
-			ui->text("%.1d fps (%.2f ms)", lastFPS, (1000.0f / lastFPS));
-
-			if (ui->header("Environment")) {
-				if (ui->checkbox("Background", &displayBackground)) {
-					updateShaderParams = true;
-				}
-				ui->text("Exposure");
-				if (ui->slider("##exposure", &shaderValuesParams.exposure, 0.1f, 10.0f)) {
-					updateShaderParams = true;
-				}
-				ui->text("Gamma");
-				if (ui->slider("##gamma", &shaderValuesParams.gamma, 0.1f, 4.0f)) {
-					updateShaderParams = true;
-				}
-				ui->text("IBL contribution");
-				if (ui->slider("##ibl", &shaderValuesParams.scaleIBLAmbient, 0.0f, 1.0f)) {
-					updateShaderParams = true;
-				}
-			}
-
-			if (ui->header("Debug view")) {
-				ui->text("Inputs");
-				const std::vector<std::string> debugNamesInputs = {
-					"none", "Base color", "Normal", "Occlusion", "Emissive", "Metallic", "Roughness"
-				};
-				if (ui->combo("##dbgview_inputs", &debugViewInputs, debugNamesInputs)) {
-					shaderValuesParams.debugViewInputs = debugViewInputs;
-					updateShaderParams = true;
-				}
-				ui->text("PBR equation");
-				const std::vector<std::string> debugNamesEquation = {
-					"none", "Diff (l,n)", "F (l,h)", "G (l,v,h)", "D (h)", "Specular"
-				};
-				if (ui->combo("##dbgview_eq", &debugViewEquation, debugNamesEquation)) {
-					shaderValuesParams.debugViewEquation = debugViewEquation;
-					updateShaderParams = true;
-				}
-			}
-
-			if (ui->header("Files")) {
+		if (ui->header("Scene")) {
 #if defined(_WIN32)
-				if (ui->button("Load scene")) {
-					char filename[MAX_PATH];
+			if (ui->button("Open gltf file")) {
+				char filename[MAX_PATH];
 
-					OPENFILENAME ofn;
-					ZeroMemory(&filename, sizeof(filename));
-					ZeroMemory(&ofn, sizeof(ofn));
-					ofn.lStructSize = sizeof(ofn);
-					ofn.lpstrFilter = "glTF files\0*.gltf;*.glb\0";
-					ofn.lpstrFile = filename;
-					ofn.nMaxFile = MAX_PATH;
-					ofn.lpstrTitle = "Select a glTF file to load";
-					ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+				OPENFILENAME ofn;
+				ZeroMemory(&filename, sizeof(filename));
+				ZeroMemory(&ofn, sizeof(ofn));
+				ofn.lStructSize = sizeof(ofn);
+				ofn.lpstrFilter = "glTF files\0*.gltf;*.glb\0";
+				ofn.lpstrFile = filename;
+				ofn.nMaxFile = MAX_PATH;
+				ofn.lpstrTitle = "Select a glTF file to load";
+				ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
-					if (GetOpenFileNameA(&ofn)) {
-						vkDeviceWaitIdle(device);
-						loadScene(filename);
-						setupDescriptors();
-						updateCBs = true;
-					}
+				if (GetOpenFileNameA(&ofn)) {
+					vkDeviceWaitIdle(device);
+					loadScene(filename);
+					setupDescriptors();
+					updateCBs = true;
 				}
+			}
 #else
-				ui->text("Scene");
-				if (ui->combo("##scene", selectedScene, scenes)) {
-					vkDeviceWaitIdle(device);
-					loadScene(scenes[selectedScene]);
-					setupDescriptors();
-					updateCBs = true;
-				}
+			if (ui->combo("Scene", selectedScene, scenes)) {
+				vkDeviceWaitIdle(device);
+				loadScene(scenes[selectedScene]);
+				setupDescriptors();
+				updateCBs = true;
+			}
 #endif
-				ui->text("Environment");
-				if (ui->combo("##environment", selectedEnvironment, environments)) {
-					vkDeviceWaitIdle(device);
-					loadEnvironment(environments[selectedEnvironment]);
-					setupDescriptors();
-					updateCBs = true;
-				}
-				if (models.scene.animations.size() > 0) {
-					if (ui->header("Animations")) {
-						ui->checkbox("Animate", &animate);
-						std::vector<std::string> animationNames;
-						for (auto animation : models.scene.animations) {
-							animationNames.push_back(animation.name);
-						}
-						ui->text("Animation");
-						ui->combo("##animation", &animationIndex, animationNames);
-					}
-				}
+			if (ui->combo("Environment", selectedEnvironment, environments)) {
+				vkDeviceWaitIdle(device);
+				loadEnvironment(environments[selectedEnvironment]);
+				setupDescriptors();
+				updateCBs = true;
 			}
 		}
 
+		if (ui->header("Environment")) {
+			if (ui->checkbox("Background", &displayBackground)) {
+				updateShaderParams = true;
+			}
+			if (ui->slider("Exposure", &shaderValuesParams.exposure, 0.1f, 10.0f)) {
+				updateShaderParams = true;
+			}
+			if (ui->slider("Gamma", &shaderValuesParams.gamma, 0.1f, 4.0f)) {
+				updateShaderParams = true;
+			}
+			if (ui->slider("IBL", &shaderValuesParams.scaleIBLAmbient, 0.0f, 1.0f)) {
+				updateShaderParams = true;
+			}
+		}
+
+		if (ui->header("Debug view")) {
+			const std::vector<std::string> debugNamesInputs = {
+				"none", "Base color", "Normal", "Occlusion", "Emissive", "Metallic", "Roughness"
+			};
+			if (ui->combo("Inputs", &debugViewInputs, debugNamesInputs)) {
+				shaderValuesParams.debugViewInputs = debugViewInputs;
+				updateShaderParams = true;
+			}
+			const std::vector<std::string> debugNamesEquation = {
+				"none", "Diff (l,n)", "F (l,h)", "G (l,v,h)", "D (h)", "Specular"
+			};
+			if (ui->combo("PBR equation", &debugViewEquation, debugNamesEquation)) {
+				shaderValuesParams.debugViewEquation = debugViewEquation;
+				updateShaderParams = true;
+			}
+		}
+
+		if (models.scene.animations.size() > 0) {
+			if (ui->header("Animations")) {
+				ui->checkbox("Animate", &animate);
+				std::vector<std::string> animationNames;
+				for (auto animation : models.scene.animations) {
+					animationNames.push_back(animation.name);
+				}
+				ui->combo("Animation", &animationIndex, animationNames);
+			}
+		}
+
+		ImGui::PopItemWidth();
 		ImGui::End();
 		ImGui::Render();
 
