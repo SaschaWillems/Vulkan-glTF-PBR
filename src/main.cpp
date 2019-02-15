@@ -1756,7 +1756,7 @@ public:
 		ImGui::NewFrame();
 
 		ImGui::SetNextWindowPos(ImVec2(10, 10));
-		ImGui::SetNextWindowSize(ImVec2(200, models.scene.animations.size() > 0 ? 425 : 350), ImGuiSetCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(200, models.scene.animations.size() > 0 ? 420 : 340), ImGuiSetCond_Always);
 		ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 		ImGui::PushItemWidth(100.0f);
 
@@ -1785,7 +1785,7 @@ public:
 				}
 			}
 #else
-			if (ui->combo("Scene", selectedScene, scenes)) {
+			if (ui->combo("File", selectedScene, scenes)) {
 				vkDeviceWaitIdle(device);
 				loadScene(scenes[selectedScene]);
 				setupDescriptors();
