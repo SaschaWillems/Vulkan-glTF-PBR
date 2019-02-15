@@ -23,8 +23,8 @@ layout (set = 0, binding = 1) uniform UBOParams {
 	float gamma;
 	float prefilteredCubeMipLevels;
 	float scaleIBLAmbient;
-	vec4 scaleFGDSpec;
-	vec4 scaleDiffBaseMR;
+	float debugViewInputs;
+	float debugViewEquation;
 } uboParams;
 
 layout (set = 0, binding = 2) uniform samplerCube samplerIrradiance;
@@ -360,17 +360,55 @@ void main()
 		color += emissive;
 	}
 	
-	// This section uses mix to override final color for reference app visualization
-	// of various parameters in the lighting equation.
-	color = mix(color, F, uboParams.scaleFGDSpec.x);
-	color = mix(color, vec3(G), uboParams.scaleFGDSpec.y);
-	color = mix(color, vec3(D), uboParams.scaleFGDSpec.z);
-	color = mix(color, specContrib, uboParams.scaleFGDSpec.w);
-
-	color = mix(color, diffuseContrib, uboParams.scaleDiffBaseMR.x);
-	color = mix(color, baseColor.rgb, uboParams.scaleDiffBaseMR.y);
-	color = mix(color, vec3(metallic), uboParams.scaleDiffBaseMR.z);
-	color = mix(color, vec3(perceptualRoughness), uboParams.scaleDiffBaseMR.w);
-
 	outColor = vec4(color, baseColor.a);
+
+	// Shader inputs debug visualization
+	if (uboParams.debugViewInputs > 0.0) {
+		int index = int(uboParams.debugViewInputs);
+		switch (index) {
+			case 1:
+				outColor.rgba = texture(colorMap, inUV);
+				break;
+			case 2:
+				outColor.rgb = (material.hasNormalTexture == 1.0f) ? texture(normalMap, inUV).rgb : normalize(inNormal);
+				break;
+			case 3:
+				outColor.rgb = (material.hasOcclusionTexture == 1.0f) ? texture(aoMap, inUV).rrr : vec3(0.0f);
+				break;
+			case 4:
+				outColor.rgb = (material.hasEmissiveTexture == 1.0f) ? texture(emissiveMap, inUV).rgb : vec3(0.0f);
+				break;
+			case 5:
+				outColor.rgb = texture(physicalDescriptorMap, inUV).bbb;
+				break;
+			case 6:
+				outColor.rgb = texture(physicalDescriptorMap, inUV).ggg;
+				break;
+		}
+		outColor = SRGBtoLINEAR(outColor);
+	}
+
+	// PBR equation debug visualization
+	// "none", "Diff (l,n)", "F (l,h)", "G (l,v,h)", "D (h)", "Specular"
+	if (uboParams.debugViewEquation > 0.0) {
+		int index = int(uboParams.debugViewEquation);
+		switch (index) {
+			case 1:
+				outColor.rgb = diffuseContrib;
+				break;
+			case 2:
+				outColor.rgb = F;
+				break;
+			case 3:
+				outColor.rgb = vec3(G);
+				break;
+			case 4: 
+				outColor.rgb = vec3(D);
+				break;
+			case 5:
+				outColor.rgb = specContrib;
+				break;				
+		}
+	}
+
 }

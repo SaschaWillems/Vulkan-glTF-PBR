@@ -71,8 +71,8 @@ public:
 		float gamma = 2.2f;
 		float prefilteredCubeMipLevels;
 		float scaleIBLAmbient = 1.0f;
-		glm::vec4 scaleFGDSpec = glm::vec4(0.0f);
-		glm::vec4 scaleDiffBaseMR = glm::vec4(0.0f);
+		float debugViewInputs = 0;
+		float debugViewEquation = 0;
 	} shaderValuesParams;
 
 	VkPipelineLayout pipelineLayout;
@@ -154,6 +154,9 @@ public:
 	std::map<std::string, std::string> scenes;
 	std::string selectedScene = "DamagedHelmet";
 #endif
+
+	int32_t debugViewInputs = 0;
+	int32_t debugViewEquation = 0;
 
 	VulkanExample() : VulkanExampleBase()
 	{
@@ -1806,50 +1809,23 @@ public:
 				}
 			}
 
-			if (ui->header("Inputs")) {
-				if (ui->checkbox(metallicRoughnessWorkflow ? "Base Color" : "Diffuse", &shaderValuesParams.scaleDiffBaseMR[1])) {
-					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f, shaderValuesParams.scaleDiffBaseMR[1], 0.0f, 0.0f);
-					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f);
-					updateShaderParams = true;
+			if (ui->header("Debug view")) {
+				ui->text("Inputs");
+				const std::vector<std::string> debugNamesInputs = {
+					"none", "Base color", "Normal", "Occlusion", "Emissive", "Metallic", "Roughness"
 				};
-				if (ui->checkbox(metallicRoughnessWorkflow ? "Metallic" : "Specular", &shaderValuesParams.scaleDiffBaseMR[2])) {
-					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f, 0.0f, shaderValuesParams.scaleDiffBaseMR[2], 0.0f);
-					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f);
+				if (ui->combo("##dbgview_inputs", &debugViewInputs, debugNamesInputs)) {
+					shaderValuesParams.debugViewInputs = debugViewInputs;
 					updateShaderParams = true;
+				}
+				ui->text("PBR equation");
+				const std::vector<std::string> debugNamesEquation = {
+					"none", "Diff (l,n)", "F (l,h)", "G (l,v,h)", "D (h)", "Specular"
 				};
-				if (ui->checkbox(metallicRoughnessWorkflow ? "Roughness" : "Glossiness", &shaderValuesParams.scaleDiffBaseMR[3])) {
-					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f, 0.0f, 0.0f, shaderValuesParams.scaleDiffBaseMR[3]);
-					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f);
+				if (ui->combo("##dbgview_eq", &debugViewEquation, debugNamesEquation)) {
+					shaderValuesParams.debugViewEquation = debugViewEquation;
 					updateShaderParams = true;
-				};
-			}
-
-			if (ui->header("PBR equation")) {
-				if (ui->checkbox("Diff(l,n)", &shaderValuesParams.scaleDiffBaseMR[0])) {
-					shaderValuesParams.scaleDiffBaseMR = glm::vec4(shaderValuesParams.scaleDiffBaseMR[0], 0.0f, 0.0f, 0.0f);
-					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f);
-					updateShaderParams = true;
-				};
-				if (ui->checkbox("F(l,h)", &shaderValuesParams.scaleFGDSpec[0])) {
-					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f);
-					shaderValuesParams.scaleFGDSpec = glm::vec4(shaderValuesParams.scaleFGDSpec[0], 0.0f, 0.0f, 0.0f);
-					updateShaderParams = true;
-				};
-				if (ui->checkbox("G(l,v,h)", &shaderValuesParams.scaleFGDSpec[1])) {
-					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f);
-					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f, shaderValuesParams.scaleFGDSpec[1], 0.0f, 0.0f);
-					updateShaderParams = true;
-				};
-				if (ui->checkbox("D(h)", &shaderValuesParams.scaleFGDSpec[2])) {
-					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f);
-					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f, 0.0f, shaderValuesParams.scaleFGDSpec[2], 0.0f);
-					updateShaderParams = true;
-				};
-				if (ui->checkbox("Specular ", &shaderValuesParams.scaleFGDSpec[3])) {
-					shaderValuesParams.scaleDiffBaseMR = glm::vec4(0.0f);
-					shaderValuesParams.scaleFGDSpec = glm::vec4(0.0f, 0.0f, 0.0f, shaderValuesParams.scaleFGDSpec[3]);
-					updateShaderParams = true;
-				};
+				}
 			}
 
 			if (ui->header("Files")) {
