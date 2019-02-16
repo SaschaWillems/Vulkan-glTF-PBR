@@ -21,7 +21,7 @@ The following major glTF 2.0 features are currently supported by the [vkglTF::Mo
         * [x] Specular-Glossiness workflow (extension)
     * [x] Animations   
         * [x] Articulated (translate, rotate, scale)
-        * [x] Skinned (up to 64 joints per skin)
+        * [x] Skinned
         * [ ] Morph targets
     * [x] Support for Draco mesh compression ([see instructions](#how-to-enable-draco-mesh-compression))
 
