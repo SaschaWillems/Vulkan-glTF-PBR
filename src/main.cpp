@@ -1740,6 +1740,7 @@ public:
 	{
 		ImGuiIO& io = ImGui::GetIO();
 
+		ImVec2 lastDisplaySize = io.DisplaySize;
 		io.DisplaySize = ImVec2((float)width, (float)height);
 		io.DeltaTime = frameTimer;
 
@@ -1885,6 +1886,10 @@ public:
 			ui->indexBuffer.flush();
 
 			updateCBs = updateCBs || updateBuffers;
+		}
+
+		if (lastDisplaySize.x != io.DisplaySize.x || lastDisplaySize.y != io.DisplaySize.y) {
+			updateCBs = true;
 		}
 
 		if (updateCBs) {
