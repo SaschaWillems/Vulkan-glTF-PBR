@@ -16,6 +16,7 @@
 #include <vector>
 #include <chrono>
 #include <map>
+#include "algorithm"
 
 #if defined(__ANDROID__)
 #define TINYGLTF_ANDROID_LOAD_FROM_ASSETS
@@ -1764,28 +1765,41 @@ public:
 		ui->text("%.1d fps (%.2f ms)", lastFPS, (1000.0f / lastFPS));
 
 		if (ui->header("Scene")) {
-#if defined(_WIN32)
 			if (ui->button("Open gltf file")) {
-				char filename[MAX_PATH];
-
+				std::string filename = "";
+#if defined(_WIN32)
+				char buffer[MAX_PATH];
 				OPENFILENAME ofn;
-				ZeroMemory(&filename, sizeof(filename));
+				ZeroMemory(&buffer, sizeof(buffer));
 				ZeroMemory(&ofn, sizeof(ofn));
 				ofn.lStructSize = sizeof(ofn);
 				ofn.lpstrFilter = "glTF files\0*.gltf;*.glb\0";
-				ofn.lpstrFile = filename;
+				ofn.lpstrFile = buffer;
 				ofn.nMaxFile = MAX_PATH;
 				ofn.lpstrTitle = "Select a glTF file to load";
 				ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-
 				if (GetOpenFileNameA(&ofn)) {
+					filename = buffer;
+				}
+#elif defined(__linux__)
+				char buffer[1024];
+				FILE *file = popen("zenity --title=\"Select a glTF file to load\" --file-filter=\"glTF files | *.gltf *.glb\" --file-selection", "r");
+				if (file) {
+					while (fgets(buffer, sizeof(buffer), file)) {
+						filename += buffer;
+					};
+					filename.erase(std::remove(filename.begin(), filename.end(), '\n'), filename.end());
+					std::cout << filename << std::endl;
+				}
+#endif
+				if (!filename.empty()) {
 					vkDeviceWaitIdle(device);
 					loadScene(filename);
 					setupDescriptors();
 					updateCBs = true;
 				}
 			}
-#else
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
 			if (ui->combo("File", selectedScene, scenes)) {
 				vkDeviceWaitIdle(device);
 				loadScene(scenes[selectedScene]);
