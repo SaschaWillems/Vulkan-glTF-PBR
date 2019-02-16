@@ -14,9 +14,11 @@ layout (set = 0, binding = 0) uniform UBO
 	vec3 camPos;
 } ubo;
 
+#define MAX_NUM_JOINTS 128
+
 layout (set = 2, binding = 0) uniform UBONode {
 	mat4 matrix;
-	mat4 jointMatrix[64];
+	mat4 jointMatrix[MAX_NUM_JOINTS];
 	float jointCount;
 } node;
 

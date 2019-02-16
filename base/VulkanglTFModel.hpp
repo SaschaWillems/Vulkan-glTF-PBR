@@ -40,6 +40,9 @@
 #include <android/asset_manager.h>
 #endif
 
+// Changing this value here also requires changing it in the vertex shader
+#define MAX_NUM_JOINTS 128u
+
 namespace vkglTF
 {
 	struct Node;
@@ -429,7 +432,7 @@ namespace vkglTF
 
 		struct UniformBlock {
 			glm::mat4 matrix;
-			glm::mat4 jointMatrix[64]{};
+			glm::mat4 jointMatrix[MAX_NUM_JOINTS]{};
 			float jointcount{ 0 };
 		} uniformBlock;
 
@@ -510,7 +513,7 @@ namespace vkglTF
 					mesh->uniformBlock.matrix = m;
 					// Update join matrices
 					glm::mat4 inverseTransform = glm::inverse(m);
-					size_t numJoints = std::min((uint32_t)skin->joints.size(), 64U);
+					size_t numJoints = std::min((uint32_t)skin->joints.size(), MAX_NUM_JOINTS);
 					for (size_t i = 0; i < numJoints; i++) {
 						vkglTF::Node *jointNode = skin->joints[i];
 						glm::mat4 jointMat = jointNode->getMatrix() * skin->inverseBindMatrices[i];
