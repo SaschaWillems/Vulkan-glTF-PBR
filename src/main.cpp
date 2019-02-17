@@ -1754,17 +1754,29 @@ public:
 
 		bool updateShaderParams = false;
 		bool updateCBs = false;
+		float scale = 1.0f;
 
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+		scale = (float)vks::android::screenDensity / (float)ACONFIGURATION_DENSITY_MEDIUM;
+#endif
 		ImGui::NewFrame();
 
 		ImGui::SetNextWindowPos(ImVec2(10, 10));
-		ImGui::SetNextWindowSize(ImVec2(200, models.scene.animations.size() > 0 ? 420 : 340), ImGuiSetCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(200 * scale, (models.scene.animations.size() > 0 ? 420 : 340) * scale), ImGuiSetCond_Always);
 		ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
-		ImGui::PushItemWidth(100.0f);
+		ImGui::PushItemWidth(100.0f * scale);
 
 		ui->text("%.1d fps (%.2f ms)", lastFPS, (1000.0f / lastFPS));
 
 		if (ui->header("Scene")) {
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+			if (ui->combo("File", selectedScene, scenes)) {
+				vkDeviceWaitIdle(device);
+				loadScene(scenes[selectedScene]);
+				setupDescriptors();
+				updateCBs = true;
+			}
+#else
 			if (ui->button("Open gltf file")) {
 				std::string filename = "";
 #if defined(_WIN32)
@@ -1781,7 +1793,7 @@ public:
 				if (GetOpenFileNameA(&ofn)) {
 					filename = buffer;
 				}
-#elif defined(__linux__)
+#elif defined(__linux__) && !defined(VK_USE_PLATFORM_ANDROID_KHR)
 				char buffer[1024];
 				FILE *file = popen("zenity --title=\"Select a glTF file to load\" --file-filter=\"glTF files | *.gltf *.glb\" --file-selection", "r");
 				if (file) {
@@ -1798,13 +1810,6 @@ public:
 					setupDescriptors();
 					updateCBs = true;
 				}
-			}
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-			if (ui->combo("File", selectedScene, scenes)) {
-				vkDeviceWaitIdle(device);
-				loadScene(scenes[selectedScene]);
-				setupDescriptors();
-				updateCBs = true;
 			}
 #endif
 			if (ui->combo("Environment", selectedEnvironment, environments)) {

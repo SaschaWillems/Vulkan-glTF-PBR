@@ -17,4 +17,10 @@ public class VulkanActivity extends NativeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
     }
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+        System.gc();
+        System.exit(0);
+    }
 }
