@@ -1740,12 +1740,14 @@ void VulkanExampleBase::windowResize()
 	width = destWidth;
 	height = destHeight;
 	setupSwapChain();
-	vkDestroyImageView(device, multisampleTarget.color.view, nullptr);
-	vkDestroyImage(device, multisampleTarget.color.image, nullptr);
-	vkFreeMemory(device, multisampleTarget.color.memory, nullptr);
-	vkDestroyImageView(device, multisampleTarget.depth.view, nullptr);
-	vkDestroyImage(device, multisampleTarget.depth.image, nullptr);
-	vkFreeMemory(device, multisampleTarget.depth.memory, nullptr);
+	if (settings.multiSampling) {
+		vkDestroyImageView(device, multisampleTarget.color.view, nullptr);
+		vkDestroyImage(device, multisampleTarget.color.image, nullptr);
+		vkFreeMemory(device, multisampleTarget.color.memory, nullptr);
+		vkDestroyImageView(device, multisampleTarget.depth.view, nullptr);
+		vkDestroyImage(device, multisampleTarget.depth.image, nullptr);
+		vkFreeMemory(device, multisampleTarget.depth.memory, nullptr);
+	}
 	vkDestroyImageView(device, depthStencil.view, nullptr);
 	vkDestroyImage(device, depthStencil.image, nullptr);
 	vkFreeMemory(device, depthStencil.mem, nullptr);
