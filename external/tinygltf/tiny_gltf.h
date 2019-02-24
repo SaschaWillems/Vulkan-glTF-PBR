@@ -59,6 +59,7 @@ namespace tinygltf {
 #define TINYGLTF_MODE_POINTS (0)
 #define TINYGLTF_MODE_LINE (1)
 #define TINYGLTF_MODE_LINE_LOOP (2)
+#define TINYGLTF_MODE_LINE_STRIP (3)
 #define TINYGLTF_MODE_TRIANGLES (4)
 #define TINYGLTF_MODE_TRIANGLE_STRIP (5)
 #define TINYGLTF_MODE_TRIANGLE_FAN (6)
@@ -379,6 +380,17 @@ struct Parameter {
     return -1;
   }
 
+  /// Return the index of a texture coordinate set if this Parameter is a texture map.
+  /// Returned value is only valid if the parameter represent a texture from a
+  /// material
+  int TextureTexCoord() const {
+      const auto it = json_double_value.find("texCoord");
+      if (it != std::end(json_double_value)) {
+          return int(it->second);
+      }
+      return 0;
+  }
+
   /// Material factor, like the roughness or metalness of a material
   /// Returned value is only valid if the parameter represent a texture from a
   /// material
@@ -467,7 +479,9 @@ struct Sampler {
   Value extras;
 
   Sampler()
-      : wrapS(TINYGLTF_TEXTURE_WRAP_REPEAT),
+      : minFilter(TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR),
+        magFilter(TINYGLTF_TEXTURE_FILTER_LINEAR),
+        wrapS(TINYGLTF_TEXTURE_WRAP_REPEAT),
         wrapT(TINYGLTF_TEXTURE_WRAP_REPEAT),
         wrapR(TINYGLTF_TEXTURE_WRAP_REPEAT){}
   bool operator==(const Sampler &) const;
@@ -1083,7 +1097,29 @@ class TinyGLTF {
 #endif
 
 #ifdef _WIN32
-#include <windows.h>
+
+// issue 143.
+// Define NOMINMAX to avoid min/max defines,
+// but undef it after included windows.h
+#ifndef NOMINMAX
+#define TINYGLTF_INTERNAL_NOMINMAX
+#define NOMINMAX
+#endif
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#define TINYGLTF_INTERNAL_WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h> // include API for expanding a file path
+
+#ifdef TINYGLTF_INTERNAL_WIN32_LEAN_AND_MEAN
+#undef WIN32_LEAN_AND_MEAN
+#endif
+
+#if defined(TINYGLTF_INTERNAL_NOMINMAX)
+#undef NOMINMAX
+#endif
+
 #elif !defined(__ANDROID__)
 #include <wordexp.h>
 #endif
@@ -3260,13 +3296,8 @@ static bool ParseAnimation(Animation *animation, std::string *err,
           }
           return false;
         }
-        if (!ParseStringProperty(&sampler.interpolation, err, s,
-                                 "interpolation", true)) {
-          if (err) {
-            (*err) += "`interpolation` field is missing in animation.sampler\n";
-          }
-          return false;
-        }
+        ParseStringProperty(&sampler.interpolation, err, s, "interpolation",
+                            false);
         if (!ParseNumberProperty(&outputIndex, err, s, "output", true)) {
           if (err) {
             (*err) += "`output` field is missing in animation.sampler\n";
