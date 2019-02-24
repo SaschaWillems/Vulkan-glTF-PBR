@@ -6,7 +6,8 @@
 
 layout (location = 0) in vec3 inWorldPos;
 layout (location = 1) in vec3 inNormal;
-layout (location = 2) in vec2 inUV;
+layout (location = 2) in vec2 inUV0;
+layout (location = 3) in vec2 inUV1;
 
 // Scene bindings
 
@@ -45,11 +46,11 @@ layout (push_constant) uniform Material {
 	vec4 diffuseFactor;
 	vec4 specularFactor;
 	float workflow;
-	float hasBaseColorTexture;
-	float hasPhysicalDescriptorTexture;
-	float hasNormalTexture;	
-	float hasOcclusionTexture;	
-	float hasEmissiveTexture;
+	int baseColorTextureSet;
+	int physicalDescriptorTextureSet;
+	int normalTextureSet;	
+	int occlusionTextureSet;
+	int emissiveTextureSet;
 	float metallicFactor;	
 	float roughnessFactor;	
 	float alphaMask;	
@@ -124,12 +125,12 @@ vec4 SRGBtoLINEAR(vec4 srgbIn)
 vec3 getNormal()
 {
 	// Perturb normal, see http://www.thetenthplanet.de/archives/1180
-	vec3 tangentNormal = texture(normalMap, inUV).xyz * 2.0 - 1.0;
+	vec3 tangentNormal = texture(normalMap, material.normalTextureSet == 0 ? inUV0 : inUV1).xyz * 2.0 - 1.0;
 
 	vec3 q1 = dFdx(inWorldPos);
 	vec3 q2 = dFdy(inWorldPos);
-	vec2 st1 = dFdx(inUV);
-	vec2 st2 = dFdy(inUV);
+	vec2 st1 = dFdx(inUV0);
+	vec2 st2 = dFdy(inUV0);
 
 	vec3 N = normalize(inNormal);
 	vec3 T = normalize(q1 * st2.t - q2 * st1.t);
@@ -226,8 +227,8 @@ void main()
 	vec3 f0 = vec3(0.04);
 
 	if (material.alphaMask == 1.0f) {
-		if (material.hasBaseColorTexture == 1.0f) {
-			baseColor = SRGBtoLINEAR(texture(colorMap, inUV)) * material.baseColorFactor;
+		if (material.baseColorTextureSet > -1) {
+			baseColor = SRGBtoLINEAR(texture(colorMap, material.baseColorTextureSet == 0 ? inUV0 : inUV1)) * material.baseColorFactor;
 		} else {
 			baseColor = material.baseColorFactor;
 		}
@@ -242,10 +243,10 @@ void main()
 		// or from a metallic-roughness map
 		perceptualRoughness = material.roughnessFactor;
 		metallic = material.metallicFactor;
-		if (material.hasPhysicalDescriptorTexture == 1.0f) {
+		if (material.physicalDescriptorTextureSet > -1) {
 			// Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
 			// This layout intentionally reserves the 'r' channel for (optional) occlusion map data
-			vec4 mrSample = texture(physicalDescriptorMap, inUV);
+			vec4 mrSample = texture(physicalDescriptorMap, material.physicalDescriptorTextureSet == 0 ? inUV0 : inUV1);
 			perceptualRoughness = mrSample.g * perceptualRoughness;
 			metallic = mrSample.b * metallic;
 		} else {
@@ -256,8 +257,8 @@ void main()
 		// convert to material roughness by squaring the perceptual roughness [2].
 
 		// The albedo may be defined from a base texture or a flat color
-		if (material.hasBaseColorTexture == 1.0f) {
-			baseColor = SRGBtoLINEAR(texture(colorMap, inUV)) * material.baseColorFactor;
+		if (material.baseColorTextureSet > -1) {
+			baseColor = SRGBtoLINEAR(texture(colorMap, material.baseColorTextureSet == 0 ? inUV0 : inUV1)) * material.baseColorFactor;
 		} else {
 			baseColor = material.baseColorFactor;
 		}
@@ -265,16 +266,16 @@ void main()
 
 	if (material.workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS) {
 		// Values from specular glossiness workflow are converted to metallic roughness
-		if (material.hasPhysicalDescriptorTexture == 1.0f) {
-			perceptualRoughness = 1.0 - texture(physicalDescriptorMap, inUV).a;
+		if (material.physicalDescriptorTextureSet > -1) {
+			perceptualRoughness = 1.0 - texture(physicalDescriptorMap, material.physicalDescriptorTextureSet == 0 ? inUV0 : inUV1).a;
 		} else {
 			perceptualRoughness = 0.0;
 		}
 
 		const float epsilon = 1e-6;
 
-		vec4 diffuse = SRGBtoLINEAR(texture(colorMap, inUV));
-		vec3 specular = SRGBtoLINEAR(texture(physicalDescriptorMap, inUV)).rgb;
+		vec4 diffuse = SRGBtoLINEAR(texture(colorMap, inUV0));
+		vec3 specular = SRGBtoLINEAR(texture(physicalDescriptorMap, inUV0)).rgb;
 
 		float maxSpecular = max(max(specular.r, specular.g), specular.b);
 
@@ -303,7 +304,7 @@ void main()
 	vec3 specularEnvironmentR0 = specularColor.rgb;
 	vec3 specularEnvironmentR90 = vec3(1.0, 1.0, 1.0) * reflectance90;
 
-	vec3 n = (material.hasNormalTexture == 1.0f) ? getNormal() : normalize(inNormal);
+	vec3 n = (material.normalTextureSet > -1) ? getNormal() : normalize(inNormal);
 	vec3 v = normalize(ubo.camPos - inWorldPos);    // Vector from surface point to camera
 	vec3 l = normalize(uboParams.lightDir.xyz);     // Vector from surface point to light
 	vec3 h = normalize(l+v);                        // Half vector between both l and v
@@ -349,14 +350,14 @@ void main()
 
 	const float u_OcclusionStrength = 1.0f;
 	// Apply optional PBR terms for additional (optional) shading
-	if (material.hasOcclusionTexture == 1.0f) {
-		float ao = texture(aoMap, inUV).r;
+	if (material.occlusionTextureSet > -1) {
+		float ao = texture(aoMap, (material.occlusionTextureSet == 0 ? inUV0 : inUV1)).r;
 		color = mix(color, color * ao, u_OcclusionStrength);
 	}
 
 	const float u_EmissiveFactor = 1.0f;
-	if (material.hasEmissiveTexture == 1.0f) {
-		vec3 emissive = SRGBtoLINEAR(texture(emissiveMap, inUV)).rgb * u_EmissiveFactor;
+	if (material.emissiveTextureSet > -1) {
+		vec3 emissive = SRGBtoLINEAR(texture(emissiveMap, material.emissiveTextureSet == 0 ? inUV0 : inUV1)).rgb * u_EmissiveFactor;
 		color += emissive;
 	}
 	
@@ -367,22 +368,22 @@ void main()
 		int index = int(uboParams.debugViewInputs);
 		switch (index) {
 			case 1:
-				outColor.rgba = texture(colorMap, inUV);
+				outColor.rgba = material.baseColorTextureSet > -1 ? texture(colorMap, material.baseColorTextureSet == 0 ? inUV0 : inUV1) : vec4(1.0f);
 				break;
 			case 2:
-				outColor.rgb = (material.hasNormalTexture == 1.0f) ? texture(normalMap, inUV).rgb : normalize(inNormal);
+				outColor.rgb = (material.normalTextureSet > -1) ? texture(normalMap, material.normalTextureSet == 0 ? inUV0 : inUV1).rgb : normalize(inNormal);
 				break;
 			case 3:
-				outColor.rgb = (material.hasOcclusionTexture == 1.0f) ? texture(aoMap, inUV).rrr : vec3(0.0f);
+				outColor.rgb = (material.occlusionTextureSet > -1) ? texture(aoMap, material.occlusionTextureSet == 0 ? inUV0 : inUV1).rrr : vec3(0.0f);
 				break;
 			case 4:
-				outColor.rgb = (material.hasEmissiveTexture == 1.0f) ? texture(emissiveMap, inUV).rgb : vec3(0.0f);
+				outColor.rgb = (material.emissiveTextureSet > -1) ? texture(emissiveMap, material.emissiveTextureSet == 0 ? inUV0 : inUV1).rgb : vec3(0.0f);
 				break;
 			case 5:
-				outColor.rgb = texture(physicalDescriptorMap, inUV).bbb;
+				outColor.rgb = texture(physicalDescriptorMap, inUV0).bbb;
 				break;
 			case 6:
-				outColor.rgb = texture(physicalDescriptorMap, inUV).ggg;
+				outColor.rgb = texture(physicalDescriptorMap, inUV0).ggg;
 				break;
 		}
 		outColor = SRGBtoLINEAR(outColor);

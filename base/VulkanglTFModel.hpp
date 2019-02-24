@@ -379,6 +379,14 @@ namespace vkglTF
 		vkglTF::Texture *normalTexture;
 		vkglTF::Texture *occlusionTexture;
 		vkglTF::Texture *emissiveTexture;
+		struct TexCoordSets {
+			uint8_t baseColor = 0;
+			uint8_t metallicRoughness = 0;
+			uint8_t specularGlossiness = 0;
+			uint8_t normal = 0;
+			uint8_t occlusion = 0;
+			uint8_t emissive = 0;
+		} texCoordSets;
 		struct Extension {
 			vkglTF::Texture *specularGlossinessTexture;
 			vkglTF::Texture *diffuseTexture;
@@ -583,7 +591,8 @@ namespace vkglTF
 		struct Vertex {
 			glm::vec3 pos;
 			glm::vec3 normal;
-			glm::vec2 uv;
+			glm::vec2 uv0;
+			glm::vec2 uv1;
 			glm::vec4 joint0;
 			glm::vec4 weight0;
 		};
@@ -697,7 +706,8 @@ namespace vkglTF
 					{
 						const float *bufferPos = nullptr;
 						const float *bufferNormals = nullptr;
-						const float *bufferTexCoords = nullptr;
+						const float *bufferTexCoordSet0 = nullptr;
+						const float *bufferTexCoordSet1 = nullptr;
 						const uint16_t *bufferJoints = nullptr;
 						const float *bufferWeights = nullptr;
 
@@ -719,7 +729,12 @@ namespace vkglTF
 						if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
 							const tinygltf::Accessor &uvAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
 							const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
-							bufferTexCoords = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
+							bufferTexCoordSet0 = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
+						}
+						if (primitive.attributes.find("TEXCOORD_1") != primitive.attributes.end()) {
+							const tinygltf::Accessor &uvAccessor = model.accessors[primitive.attributes.find("TEXCOORD_1")->second];
+							const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
+							bufferTexCoordSet1 = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
 						}
 
 						// Skinning
@@ -742,8 +757,9 @@ namespace vkglTF
 							Vertex vert{};
 							vert.pos = glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
 							vert.normal = glm::normalize(glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
-							vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
-							
+							vert.uv0 = bufferTexCoordSet0 ? glm::make_vec2(&bufferTexCoordSet0[v * 2]) : glm::vec3(0.0f);
+							vert.uv1 = bufferTexCoordSet1 ? glm::make_vec2(&bufferTexCoordSet1[v * 2]) : glm::vec3(0.0f);
+
 							vert.joint0 = hasSkin ? glm::vec4(glm::make_vec4(&bufferJoints[v * 4])) : glm::vec4(0.0f);
 							vert.weight0 = hasSkin ? glm::make_vec4(&bufferWeights[v * 4]) : glm::vec4(0.0f);
 							vertexBuffer.push_back(vert);
@@ -911,9 +927,11 @@ namespace vkglTF
 				vkglTF::Material material{};
 				if (mat.values.find("baseColorTexture") != mat.values.end()) {
 					material.baseColorTexture = &textures[mat.values["baseColorTexture"].TextureIndex()];
+					material.texCoordSets.baseColor = mat.values["baseColorTexture"].TextureTexCoord();
 				}
 				if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
 					material.metallicRoughnessTexture = &textures[mat.values["metallicRoughnessTexture"].TextureIndex()];
+					material.texCoordSets.metallicRoughness = mat.values["metallicRoughnessTexture"].TextureTexCoord();
 				}
 				if (mat.values.find("roughnessFactor") != mat.values.end()) {
 					material.roughnessFactor = static_cast<float>(mat.values["roughnessFactor"].Factor());
@@ -926,12 +944,15 @@ namespace vkglTF
 				}				
 				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
 					material.normalTexture = &textures[mat.additionalValues["normalTexture"].TextureIndex()];
+					material.texCoordSets.normal = mat.additionalValues["normalTexture"].TextureTexCoord();
 				}
 				if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
 					material.emissiveTexture = &textures[mat.additionalValues["emissiveTexture"].TextureIndex()];
+					material.texCoordSets.emissive = mat.additionalValues["emissiveTexture"].TextureTexCoord();
 				}
 				if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
 					material.occlusionTexture = &textures[mat.additionalValues["occlusionTexture"].TextureIndex()];
+					material.texCoordSets.occlusion = mat.additionalValues["occlusionTexture"].TextureTexCoord();
 				}
 				if (mat.additionalValues.find("alphaMode") != mat.additionalValues.end()) {
 					tinygltf::Parameter param = mat.additionalValues["alphaMode"];
@@ -958,6 +979,8 @@ namespace vkglTF
 					if (ext->second.Has("specularGlossinessTexture")) {
 						auto index = ext->second.Get("specularGlossinessTexture").Get("index");
 						material.extension.specularGlossinessTexture = &textures[index.Get<int>()];
+						auto texCoordSet = ext->second.Get("specularGlossinessTexture").Get("texCoord");
+						material.texCoordSets.specularGlossiness = texCoordSet.Get<int>();
 						material.pbrWorkflows.specularGlossiness = true;
 					}
 					if (ext->second.Has("diffuseTexture")) {

@@ -137,11 +137,11 @@ public:
 		glm::vec4 diffuseFactor;
 		glm::vec4 specularFactor;
 		float workflow;
-		float hasColorTexture;
-		float hasPhysicalDescriptorTexture;
-		float hasNormalTexture;
-		float hasOcclusionTexture;
-		float hasEmissiveTexture;
+		int colorTextureSet;
+		int PhysicalDescriptorTextureSet;
+		int normalTextureSet;
+		int occlusionTextureSet;
+		int emissiveTextureSet;
 		float metallicFactor;
 		float roughnessFactor;
 		float alphaMask;
@@ -221,9 +221,12 @@ public:
 					// Pass material parameters as push constants
 					PushConstBlockMaterial pushConstBlockMaterial{};					
 					pushConstBlockMaterial.emissiveFactor = primitive->material.emissiveFactor;
-					pushConstBlockMaterial.hasNormalTexture = static_cast<float>(primitive->material.normalTexture != nullptr);
-					pushConstBlockMaterial.hasOcclusionTexture = static_cast<float>(primitive->material.occlusionTexture != nullptr);
-					pushConstBlockMaterial.hasEmissiveTexture = static_cast<float>(primitive->material.emissiveTexture != nullptr);
+					// To save push constant space, availabilty and texture coordiante set are combined
+					// -1 = texture not used for this material, >= 0 texture used and index of texture coordinate set
+					pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
+					pushConstBlockMaterial.normalTextureSet = primitive->material.normalTexture != nullptr ? primitive->material.texCoordSets.normal : -1;
+					pushConstBlockMaterial.occlusionTextureSet = primitive->material.occlusionTexture != nullptr ? primitive->material.texCoordSets.occlusion : -1;
+					pushConstBlockMaterial.emissiveTextureSet = primitive->material.emissiveTexture != nullptr ? primitive->material.texCoordSets.emissive : -1;
 					pushConstBlockMaterial.alphaMask = static_cast<float>(primitive->material.alphaMode == vkglTF::Material::ALPHAMODE_MASK);
 					pushConstBlockMaterial.alphaMaskCutoff = primitive->material.alphaCutoff;
 
@@ -235,15 +238,15 @@ public:
 						pushConstBlockMaterial.baseColorFactor = primitive->material.baseColorFactor;
 						pushConstBlockMaterial.metallicFactor = primitive->material.metallicFactor;
 						pushConstBlockMaterial.roughnessFactor = primitive->material.roughnessFactor;
-						pushConstBlockMaterial.hasPhysicalDescriptorTexture = static_cast<float>(primitive->material.metallicRoughnessTexture != nullptr);
-						pushConstBlockMaterial.hasColorTexture = static_cast<float>(primitive->material.baseColorTexture != nullptr);
+						pushConstBlockMaterial.PhysicalDescriptorTextureSet = primitive->material.metallicRoughnessTexture != nullptr ? primitive->material.texCoordSets.metallicRoughness : -1;
+						pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
 					}
 
 					if (primitive->material.pbrWorkflows.specularGlossiness) {
 						// Specular glossiness workflow
 						pushConstBlockMaterial.workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSINESS);
-						pushConstBlockMaterial.hasPhysicalDescriptorTexture = static_cast<float>(primitive->material.extension.specularGlossinessTexture != nullptr);
-						pushConstBlockMaterial.hasColorTexture = static_cast<float>(primitive->material.extension.diffuseTexture != nullptr);
+						pushConstBlockMaterial.PhysicalDescriptorTextureSet = primitive->material.extension.specularGlossinessTexture != nullptr ? primitive->material.texCoordSets.specularGlossiness : -1;
+						pushConstBlockMaterial.colorTextureSet = primitive->material.extension.diffuseTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
 						pushConstBlockMaterial.diffuseFactor = primitive->material.extension.diffuseFactor;
 						pushConstBlockMaterial.specularFactor = glm::vec4(primitive->material.extension.specularFactor, 1.0f);
 					}
@@ -735,8 +738,9 @@ public:
 			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
 			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 },
 			{ 2, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 6 },
-			{ 3, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 8 },
-			{ 4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 12 }
+			{ 3, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 8 },
+			{ 4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 10 },
+			{ 5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 14 }
 		};
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCI{};
 		vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
