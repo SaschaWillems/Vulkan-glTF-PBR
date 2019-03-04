@@ -373,6 +373,7 @@ public:
 	{
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 		tinygltf::asset_manager = androidApp->activity->assetManager;
+		readDirectory(assetpath + "models", "*.gltf", scenes, true);
 #else
 		const std::string assetpath = "./../data/";
 		struct stat info;
@@ -383,9 +384,6 @@ public:
 		}
 #endif
 		readDirectory(assetpath + "environments", "*.ktx", environments, false);
-#if !defined(_WIN32)
-		readDirectory(assetpath + "models", "*.gltf", scenes, true);
-#endif
 
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 

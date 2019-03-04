@@ -18,6 +18,8 @@
 #include "VulkanDevice.hpp"
 #if defined(__ANDROID__)
 #include <android/asset_manager.h>
+#elif defined(__linux__)
+#include <dirent.h>
 #endif
 
 /*
@@ -157,5 +159,29 @@ void readDirectory(const std::string& directory, const std::string &pattern, std
 			FindClose(hFind);
 		}
 	}
+#elif defined(__linux__)
+	std::string patternExt = pattern;
+	patternExt.erase(0, pattern.find_last_of("."));
+	struct dirent *entry;
+	DIR *dir = opendir(directory.c_str());
+	if (dir == NULL) {
+		return;
+	}
+	while ((entry = readdir(dir)) != NULL) {
+		if (entry->d_type == DT_REG) {
+			std::string filename(entry->d_name);
+			if (filename.find(patternExt) != std::string::npos) {
+				filename.erase(filename.find_last_of("."), std::string::npos);
+				filelist[filename] = directory + "/" + entry->d_name;
+			}
+		}
+		if (recursive && (entry->d_type == DT_DIR)) {
+			std::string subdir = directory + "/" + entry->d_name;
+			if ((strcmp(entry->d_name, ".") != 0) && (strcmp(entry->d_name, "..") != 0)) {
+				readDirectory(subdir, pattern, filelist, recursive);
+			}
+		}
+	}
+	closedir(dir);
 #endif
 }
