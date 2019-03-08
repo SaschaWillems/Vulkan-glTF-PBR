@@ -320,12 +320,19 @@ namespace vks
 
 			// If requested, also start recording for the new command buffer
 			if (begin) {
-				VkCommandBufferBeginInfo cmdBufInfo{};
-				cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-				VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+				VkCommandBufferBeginInfo commandBufferBI{};
+				commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+				VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &commandBufferBI));
 			}
 
 			return cmdBuffer;
+		}
+
+		void beginCommandBuffer(VkCommandBuffer commandBuffer)
+		{
+			VkCommandBufferBeginInfo commandBufferBI{};
+			commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
 		}
 
 		/**

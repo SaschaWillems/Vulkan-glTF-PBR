@@ -161,7 +161,7 @@ public:
 
 	VulkanExample() : VulkanExampleBase()
 	{
-		title = "Vulkan glTF 2.0 PBR";
+		title = "Vulkan glTF 2.0 PBR - � Sascha Willems (www.saschawillems.de)";
 #if defined(TINYGLTF_ENABLE_DRACO)
 		std::cout << "Draco mesh compression is enabled" << std::endl;
 #endif
@@ -1449,7 +1449,7 @@ public:
 				glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
 			};
 
-			VkCommandBuffer cmdBuf = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+			VkCommandBuffer cmdBuf = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, false);
 
 			VkViewport viewport{};
 			viewport.width = (float)dim;
@@ -1461,9 +1461,6 @@ public:
 			scissor.extent.width = width;
 			scissor.extent.height = height;
 
-			vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
-			vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
-
 			VkImageSubresourceRange subresourceRange{};
 			subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			subresourceRange.baseMipLevel = 0;
@@ -1472,6 +1469,7 @@ public:
 
 			// Change image layout for all cubemap faces to transfer destination
 			{
+				vulkanDevice->beginCommandBuffer(cmdBuf);
 				VkImageMemoryBarrier imageMemoryBarrier{};
 				imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 				imageMemoryBarrier.image = cubemap.image;
@@ -1481,13 +1479,18 @@ public:
 				imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 				imageMemoryBarrier.subresourceRange = subresourceRange;
 				vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+				vulkanDevice->flushCommandBuffer(cmdBuf, queue, false);
 			}
 
 			for (uint32_t m = 0; m < numMips; m++) {
 				for (uint32_t f = 0; f < 6; f++) {
+
+					vulkanDevice->beginCommandBuffer(cmdBuf);
+
 					viewport.width = static_cast<float>(dim * std::pow(0.5f, m));
 					viewport.height = static_cast<float>(dim * std::pow(0.5f, m));
 					vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+					vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
 
 					// Render scene from cube face's point of view
 					vkCmdBeginRenderPass(cmdBuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -1572,10 +1575,12 @@ public:
 						vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
 					}
 
+					vulkanDevice->flushCommandBuffer(cmdBuf, queue, false);
 				}
 			}
 
 			{
+				vulkanDevice->beginCommandBuffer(cmdBuf);
 				VkImageMemoryBarrier imageMemoryBarrier{};
 				imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 				imageMemoryBarrier.image = cubemap.image;
@@ -1585,9 +1590,9 @@ public:
 				imageMemoryBarrier.dstAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
 				imageMemoryBarrier.subresourceRange = subresourceRange;
 				vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+				vulkanDevice->flushCommandBuffer(cmdBuf, queue, false);
 			}
 
-			vulkanDevice->flushCommandBuffer(cmdBuf, queue);
 
 			vkDestroyRenderPass(device, renderpass, nullptr);
 			vkDestroyFramebuffer(device, offscreen.framebuffer, nullptr);
@@ -1764,10 +1769,11 @@ public:
 		ImGui::NewFrame();
 
 		ImGui::SetNextWindowPos(ImVec2(10, 10));
-		ImGui::SetNextWindowSize(ImVec2(200 * scale, (models.scene.animations.size() > 0 ? 420 : 340) * scale), ImGuiSetCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(200 * scale, (models.scene.animations.size() > 0 ? 440 : 360) * scale), ImGuiSetCond_Always);
 		ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 		ImGui::PushItemWidth(100.0f * scale);
 
+		ui->text("www.saschawillems.de");
 		ui->text("%.1d fps (%.2f ms)", lastFPS, (1000.0f / lastFPS));
 
 		if (ui->header("Scene")) {
