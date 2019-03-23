@@ -253,7 +253,11 @@ public:
 
 					vkCmdPushConstants(commandBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
 
-					vkCmdDrawIndexed(commandBuffers[cbIndex], primitive->indexCount, 1, primitive->firstIndex, 0, 0);
+					if (primitive->hasIndices) {
+						vkCmdDrawIndexed(commandBuffers[cbIndex], primitive->indexCount, 1, primitive->firstIndex, 0, 0);
+					} else {
+						vkCmdDraw(commandBuffers[cbIndex], primitive->vertexCount, 1, 0, 0);
+					}
 				}
 			}
 
@@ -321,7 +325,9 @@ public:
 			vkglTF::Model &model = models.scene;
 
 			vkCmdBindVertexBuffers(currentCB, 0, 1, &model.vertices.buffer, offsets);
-			vkCmdBindIndexBuffer(currentCB, model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+			if (model.indices.buffer != VK_NULL_HANDLE) {
+				vkCmdBindIndexBuffer(currentCB, model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+			}
 
 			// Opaque primitives first
 			for (auto node : model.nodes) {

@@ -406,11 +406,15 @@ namespace vkglTF
 	struct Primitive {
 		uint32_t firstIndex;
 		uint32_t indexCount;
+		uint32_t vertexCount;
 		Material &material;
+		bool hasIndices;
 
 		BoundingBox bb;
 
-		Primitive(uint32_t firstIndex, uint32_t indexCount, Material &material) : firstIndex(firstIndex), indexCount(indexCount), material(material) {};
+		Primitive(uint32_t firstIndex, uint32_t indexCount, uint32_t vertexCount, Material &material) : firstIndex(firstIndex), indexCount(indexCount), vertexCount(vertexCount), material(material) {
+			hasIndices = indexCount > 0;
+		};
 
 		void setBoundingBox(glm::vec3 min, glm::vec3 max) {
 			bb.min = min;
@@ -693,15 +697,14 @@ namespace vkglTF
 				Mesh *newMesh = new Mesh(device, newNode->matrix);
 				for (size_t j = 0; j < mesh.primitives.size(); j++) {
 					const tinygltf::Primitive &primitive = mesh.primitives[j];
-					if (primitive.indices < 0) {
-						continue;
-					}
 					uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
 					uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
 					uint32_t indexCount = 0;
+					uint32_t vertexCount = 0;
 					glm::vec3 posMin{};
 					glm::vec3 posMax{};
 					bool hasSkin = false;
+					bool hasIndices = primitive.indices > -1;
 					// Vertices
 					{
 						const float *bufferPos = nullptr;
@@ -719,6 +722,7 @@ namespace vkglTF
 						bufferPos = reinterpret_cast<const float *>(&(model.buffers[posView.buffer].data[posAccessor.byteOffset + posView.byteOffset]));
 						posMin = glm::vec3(posAccessor.minValues[0], posAccessor.minValues[1], posAccessor.minValues[2]);
 						posMax = glm::vec3(posAccessor.maxValues[0], posAccessor.maxValues[1], posAccessor.maxValues[2]);
+						vertexCount = static_cast<uint32_t>(posAccessor.count);
 
 						if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
 							const tinygltf::Accessor &normAccessor = model.accessors[primitive.attributes.find("NORMAL")->second];
@@ -766,8 +770,9 @@ namespace vkglTF
 						}
 					}
 					// Indices
+					if (hasIndices)
 					{
-						const tinygltf::Accessor &accessor = model.accessors[primitive.indices];
+						const tinygltf::Accessor &accessor = model.accessors[primitive.indices > -1 ? primitive.indices : 0];
 						const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
 						const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
 
@@ -801,7 +806,7 @@ namespace vkglTF
 							return;
 						}
 					}					
-					Primitive *newPrimitive = new Primitive(indexStart, indexCount, primitive.material > -1 ? materials[primitive.material] : materials.back());
+					Primitive *newPrimitive = new Primitive(indexStart, indexCount, vertexCount, primitive.material > -1 ? materials[primitive.material] : materials.back());
 					newPrimitive->setBoundingBox(posMin, posMax);
 					newMesh->primitives.push_back(newPrimitive);
 				}
@@ -1179,7 +1184,7 @@ namespace vkglTF
 			size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
 			indices.count = static_cast<uint32_t>(indexBuffer.size());
 
-			assert((vertexBufferSize > 0) && (indexBufferSize > 0));
+			assert(vertexBufferSize > 0);
 
 			struct StagingBuffer {
 				VkBuffer buffer;
@@ -1196,13 +1201,15 @@ namespace vkglTF
 				&vertexStaging.memory,
 				vertexBuffer.data()));
 			// Index data
-			VK_CHECK_RESULT(device->createBuffer(
-				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				indexBufferSize,
-				&indexStaging.buffer,
-				&indexStaging.memory,
-				indexBuffer.data()));
+			if (indexBufferSize > 0) {
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					indexBufferSize,
+					&indexStaging.buffer,
+					&indexStaging.memory,
+					indexBuffer.data()));
+			}
 
 			// Create device local buffers
 			// Vertex buffer
@@ -1213,12 +1220,14 @@ namespace vkglTF
 				&vertices.buffer,
 				&vertices.memory));
 			// Index buffer
-			VK_CHECK_RESULT(device->createBuffer(
-				VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-				indexBufferSize,
-				&indices.buffer,
-				&indices.memory));
+			if (indexBufferSize > 0) {
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					indexBufferSize,
+					&indices.buffer,
+					&indices.memory));
+			}
 
 			// Copy from staging buffers
 			VkCommandBuffer copyCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
@@ -1228,15 +1237,19 @@ namespace vkglTF
 			copyRegion.size = vertexBufferSize;
 			vkCmdCopyBuffer(copyCmd, vertexStaging.buffer, vertices.buffer, 1, &copyRegion);
 
-			copyRegion.size = indexBufferSize;
-			vkCmdCopyBuffer(copyCmd, indexStaging.buffer, indices.buffer, 1, &copyRegion);
+			if (indexBufferSize > 0) {
+				copyRegion.size = indexBufferSize;
+				vkCmdCopyBuffer(copyCmd, indexStaging.buffer, indices.buffer, 1, &copyRegion);
+			}
 
 			device->flushCommandBuffer(copyCmd, transferQueue, true);
 
 			vkDestroyBuffer(device->logicalDevice, vertexStaging.buffer, nullptr);
 			vkFreeMemory(device->logicalDevice, vertexStaging.memory, nullptr);
-			vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
-			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
+			if (indexBufferSize > 0) {
+				vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
+				vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
+			}
 
 			getSceneDimensions();
 		}
