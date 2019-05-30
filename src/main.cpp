@@ -1042,8 +1042,8 @@ public:
 		viewport.maxDepth = 1.0f;
 
 		VkRect2D scissor{};
-		scissor.extent.width = width;
-		scissor.extent.height = height;
+		scissor.extent.width = dim;
+		scissor.extent.height = dim;
 
 		vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
 		vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
@@ -1464,8 +1464,8 @@ public:
 			viewport.maxDepth = 1.0f;
 
 			VkRect2D scissor{};
-			scissor.extent.width = width;
-			scissor.extent.height = height;
+			scissor.extent.width = dim;
+			scissor.extent.height = dim;
 
 			VkImageSubresourceRange subresourceRange{};
 			subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
