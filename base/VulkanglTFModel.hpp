@@ -572,6 +572,7 @@ namespace vkglTF
 		InterpolationType interpolation;
 		std::vector<float> inputs;
 		std::vector<glm::vec4> outputsVec4;
+		std::vector<float> outputs;
 	};
 
 	/*
@@ -1343,28 +1344,59 @@ namespace vkglTF
 						if (u <= 1.0f) {
 							switch (channel.path) {
 							case vkglTF::AnimationChannel::PathType::TRANSLATION: {
-								glm::vec4 trans = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], u);
-								channel.node->translation = glm::vec3(trans);
+								switch (sampler.interpolation) {
+									case AnimationSampler::InterpolationType::LINEAR: {
+										glm::vec4 trans = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], u);
+										channel.node->translation = glm::vec3(trans);
+										break;
+									}
+									case AnimationSampler::InterpolationType::STEP: {
+										channel.node->translation = sampler.outputsVec4[i];
+										break;
+									}
+								}
 								break;
 							}
 							case vkglTF::AnimationChannel::PathType::SCALE: {
-								glm::vec4 trans = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], u);
-								channel.node->scale = glm::vec3(trans);
+								switch (sampler.interpolation) {
+									case AnimationSampler::InterpolationType::LINEAR: {
+										glm::vec4 trans = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], u);
+										channel.node->scale = glm::vec3(trans);
+										break;
+									}
+									case AnimationSampler::InterpolationType::STEP: {
+										channel.node->scale = sampler.outputsVec4[i];
+										break;
+									}
+								}
 								break;
 							}
 							case vkglTF::AnimationChannel::PathType::ROTATION: {
-								glm::quat q1;
-								q1.x = sampler.outputsVec4[i].x;
-								q1.y = sampler.outputsVec4[i].y;
-								q1.z = sampler.outputsVec4[i].z;
-								q1.w = sampler.outputsVec4[i].w;
-								glm::quat q2;
-								q2.x = sampler.outputsVec4[i + 1].x;
-								q2.y = sampler.outputsVec4[i + 1].y;
-								q2.z = sampler.outputsVec4[i + 1].z;
-								q2.w = sampler.outputsVec4[i + 1].w;
-								channel.node->rotation = glm::normalize(glm::slerp(q1, q2, u));
-								break;
+								switch (sampler.interpolation) {
+									case AnimationSampler::InterpolationType::LINEAR: {
+										glm::quat q1;
+										q1.x = sampler.outputsVec4[i].x;
+										q1.y = sampler.outputsVec4[i].y;
+										q1.z = sampler.outputsVec4[i].z;
+										q1.w = sampler.outputsVec4[i].w;
+										glm::quat q2;
+										q2.x = sampler.outputsVec4[i + 1].x;
+										q2.y = sampler.outputsVec4[i + 1].y;
+										q2.z = sampler.outputsVec4[i + 1].z;
+										q2.w = sampler.outputsVec4[i + 1].w;
+										channel.node->rotation = glm::normalize(glm::slerp(q1, q2, u));
+										break;
+									}
+									case AnimationSampler::InterpolationType::STEP: {
+										glm::quat q1;
+										q1.x = sampler.outputsVec4[i].x;
+										q1.y = sampler.outputsVec4[i].y;
+										q1.z = sampler.outputsVec4[i].z;
+										q1.w = sampler.outputsVec4[i].w;
+										channel.node->rotation = q1;
+										break;
+									}
+								}
 							}
 							}
 							updated = true;
