@@ -574,6 +574,31 @@ namespace vkglTF
 		std::vector<glm::vec4> outputsVec4;
 		std::vector<float> outputs;
 
+		// Details on how this works can be found in the specs: 
+		// https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#appendix-c-spline-interpolation
+		glm::vec4 cubicSplineInterpolation(size_t index, float time, uint32_t stride)
+		{
+			auto delta = inputs[index + 1] - inputs[index];
+			auto t = (time - inputs[index]) / delta;
+			const uint32_t current = index * stride * 3;
+			const uint32_t next = (index + 1) * stride * 3;
+			const uint32_t A = 0;
+			const uint32_t V = stride * 1;
+			const uint32_t B = stride * 2;
+
+			float t2 = pow(t, 2);
+			float t3 = pow(t, 3);
+			glm::vec4 pt;
+			for (uint32_t i = 0; i < stride; i++) {
+				float p0 = outputs[current + i + V];			// starting point at t = 0
+				float m0 = delta * outputs[current + i + A];	// scaled starting tangent at t = 0
+				float p1 = outputs[next + i + V];				// ending point at t = 1
+				float m1 = delta * outputs[next + i + B];		// scaled ending tangent at t = 1
+				pt[i] = ((2.0*t3 - 3.0*t2 + 1.0) * p0) + ((t3 - 2 * t2 + t) * m0) + ((-2 * t3 + 3 * t2) * p1) + ((t3 - t2) * m0);
+			}
+			return pt;
+		}
+
 		void translate(size_t index, float time, vkglTF::Node *node)
 		{
 			switch (interpolation) {
@@ -586,8 +611,11 @@ namespace vkglTF
 				node->translation = outputsVec4[index];
 				break;
 			}
+			case AnimationSampler::InterpolationType::CUBICSPLINE: {
+				node->translation = cubicSplineInterpolation(index, time, 3);
+				break;
 			}
-			// @todo: Cubic spline															
+			}
 		}
 
 		void scale(size_t index, float time, vkglTF::Node *node) {
@@ -601,8 +629,11 @@ namespace vkglTF
 				node->scale = outputsVec4[index];
 				break;
 			}
+			case AnimationSampler::InterpolationType::CUBICSPLINE: {
+				node->scale = cubicSplineInterpolation(index, time, 3);
+				break;
 			}
-			// @todo: Cubic spline															
+			}
 		}
 
 		void rotate(size_t index, float time, vkglTF::Node *node) {
@@ -631,8 +662,17 @@ namespace vkglTF
 				node->rotation = q1;
 				break;
 			}
+			case AnimationSampler::InterpolationType::CUBICSPLINE: {
+				glm::vec4 rot = cubicSplineInterpolation(index, time, 4);
+				glm::quat q;
+				q.x = rot.x;
+				q.y = rot.y;
+				q.z = rot.z;
+				q.w = rot.w;
+				node->rotation = glm::normalize(q);
+				break;
 			}
-			// @todo: Cubic spline															
+			}
 		}
 
 	};
@@ -1139,6 +1179,9 @@ namespace vkglTF
 							const glm::vec3 *buf = static_cast<const glm::vec3*>(dataPtr);
 							for (size_t index = 0; index < accessor.count; index++) {
 								sampler.outputsVec4.push_back(glm::vec4(buf[index], 0.0f));
+								sampler.outputs.push_back(buf[index][0]);
+								sampler.outputs.push_back(buf[index][1]);
+								sampler.outputs.push_back(buf[index][2]);
 							}
 							break;
 						}
@@ -1146,6 +1189,10 @@ namespace vkglTF
 							const glm::vec4 *buf = static_cast<const glm::vec4*>(dataPtr);
 							for (size_t index = 0; index < accessor.count; index++) {
 								sampler.outputsVec4.push_back(buf[index]);
+								sampler.outputs.push_back(buf[index][0]);
+								sampler.outputs.push_back(buf[index][1]);
+								sampler.outputs.push_back(buf[index][2]);
+								sampler.outputs.push_back(buf[index][3]);
 							}
 							break;
 						}
