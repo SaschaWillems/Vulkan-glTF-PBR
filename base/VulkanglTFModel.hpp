@@ -573,6 +573,68 @@ namespace vkglTF
 		std::vector<float> inputs;
 		std::vector<glm::vec4> outputsVec4;
 		std::vector<float> outputs;
+
+		void translate(size_t index, float time, vkglTF::Node *node)
+		{
+			switch (interpolation) {
+			case AnimationSampler::InterpolationType::LINEAR: {
+				float u = std::max(0.0f, time - inputs[index]) / (inputs[index + 1] - inputs[index]);
+				node->translation = glm::mix(outputsVec4[index], outputsVec4[index + 1], u);
+				break;
+			}
+			case AnimationSampler::InterpolationType::STEP: {
+				node->translation = outputsVec4[index];
+				break;
+			}
+			}
+			// @todo: Cubic spline															
+		}
+
+		void scale(size_t index, float time, vkglTF::Node *node) {
+			switch (interpolation) {
+			case AnimationSampler::InterpolationType::LINEAR: {
+				float u = std::max(0.0f, time - inputs[index]) / (inputs[index + 1] - inputs[index]);
+				node->scale = glm::mix(outputsVec4[index], outputsVec4[index + 1], u);
+				break;
+			}
+			case AnimationSampler::InterpolationType::STEP: {
+				node->scale = outputsVec4[index];
+				break;
+			}
+			}
+			// @todo: Cubic spline															
+		}
+
+		void rotate(size_t index, float time, vkglTF::Node *node) {
+			switch (interpolation) {
+			case AnimationSampler::InterpolationType::LINEAR: {
+				float u = std::max(0.0f, time - inputs[index]) / (inputs[index + 1] - inputs[index]);
+				glm::quat q1;
+				q1.x = outputsVec4[index].x;
+				q1.y = outputsVec4[index].y;
+				q1.z = outputsVec4[index].z;
+				q1.w = outputsVec4[index].w;
+				glm::quat q2;
+				q2.x = outputsVec4[index + 1].x;
+				q2.y = outputsVec4[index + 1].y;
+				q2.z = outputsVec4[index + 1].z;
+				q2.w = outputsVec4[index + 1].w;
+				node->rotation = glm::normalize(glm::slerp(q1, q2, u));
+				break;
+			}
+			case AnimationSampler::InterpolationType::STEP: {
+				glm::quat q1;
+				q1.x = outputsVec4[index].x;
+				q1.y = outputsVec4[index].y;
+				q1.z = outputsVec4[index].z;
+				q1.w = outputsVec4[index].w;
+				node->rotation = q1;
+				break;
+			}
+			}
+			// @todo: Cubic spline															
+		}
+
 	};
 
 	/*
@@ -1343,61 +1405,14 @@ namespace vkglTF
 						float u = std::max(0.0f, time - sampler.inputs[i]) / (sampler.inputs[i + 1] - sampler.inputs[i]);
 						if (u <= 1.0f) {
 							switch (channel.path) {
-							case vkglTF::AnimationChannel::PathType::TRANSLATION: {
-								switch (sampler.interpolation) {
-									case AnimationSampler::InterpolationType::LINEAR: {
-										glm::vec4 trans = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], u);
-										channel.node->translation = glm::vec3(trans);
-										break;
-									}
-									case AnimationSampler::InterpolationType::STEP: {
-										channel.node->translation = sampler.outputsVec4[i];
-										break;
-									}
-								}
+							case vkglTF::AnimationChannel::PathType::TRANSLATION:
+								sampler.translate(i, time, channel.node);
 								break;
-							}
-							case vkglTF::AnimationChannel::PathType::SCALE: {
-								switch (sampler.interpolation) {
-									case AnimationSampler::InterpolationType::LINEAR: {
-										glm::vec4 trans = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], u);
-										channel.node->scale = glm::vec3(trans);
-										break;
-									}
-									case AnimationSampler::InterpolationType::STEP: {
-										channel.node->scale = sampler.outputsVec4[i];
-										break;
-									}
-								}
+							case vkglTF::AnimationChannel::PathType::SCALE:
+								sampler.scale(i, time, channel.node);
 								break;
-							}
-							case vkglTF::AnimationChannel::PathType::ROTATION: {
-								switch (sampler.interpolation) {
-									case AnimationSampler::InterpolationType::LINEAR: {
-										glm::quat q1;
-										q1.x = sampler.outputsVec4[i].x;
-										q1.y = sampler.outputsVec4[i].y;
-										q1.z = sampler.outputsVec4[i].z;
-										q1.w = sampler.outputsVec4[i].w;
-										glm::quat q2;
-										q2.x = sampler.outputsVec4[i + 1].x;
-										q2.y = sampler.outputsVec4[i + 1].y;
-										q2.z = sampler.outputsVec4[i + 1].z;
-										q2.w = sampler.outputsVec4[i + 1].w;
-										channel.node->rotation = glm::normalize(glm::slerp(q1, q2, u));
-										break;
-									}
-									case AnimationSampler::InterpolationType::STEP: {
-										glm::quat q1;
-										q1.x = sampler.outputsVec4[i].x;
-										q1.y = sampler.outputsVec4[i].y;
-										q1.z = sampler.outputsVec4[i].z;
-										q1.w = sampler.outputsVec4[i].w;
-										channel.node->rotation = q1;
-										break;
-									}
-								}
-							}
+							case vkglTF::AnimationChannel::PathType::ROTATION:
+								sampler.rotate(i, time, channel.node);
 							}
 							updated = true;
 						}
