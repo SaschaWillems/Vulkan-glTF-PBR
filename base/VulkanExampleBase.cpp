@@ -75,25 +75,26 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 		instanceCreateInfo.enabledExtensionCount = (uint32_t)instanceExtensions.size();
 		instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions.data();
 	}
+	std::vector<const char *> validationLayerNames;
 	if (settings.validation) {
 #if !defined(__ANDROID__)
-		instanceCreateInfo.enabledLayerCount = 1;
-		const char *validationLayerNames[] = {
-			"VK_LAYER_LUNARG_standard_validation"
-		};
-		instanceCreateInfo.ppEnabledLayerNames = validationLayerNames;
+		validationLayerNames.push_back("VK_LAYER_LUNARG_standard_validation");
 #else
-		instanceCreateInfo.enabledLayerCount = 6;
-		const char *validationLayerNames[] = {
-			"VK_LAYER_GOOGLE_threading",
-			"VK_LAYER_LUNARG_parameter_validation",
-			"VK_LAYER_LUNARG_object_tracker",
-			"VK_LAYER_LUNARG_core_validation",
-			"VK_LAYER_LUNARG_swapchain",
-			"VK_LAYER_GOOGLE_unique_objects"
-		};
-		instanceCreateInfo.ppEnabledLayerNames = validationLayerNames;
+		// Use `VK_LAYER_KHRONOS_valiation` for NDK r21 or later 
+		// https://developer.android.com/ndk/guides/graphics/validation-layer
+#if 1
+		validationLayerNames.push_back("VK_LAYER_GOOGLE_threading");
+		validationLayerNames.push_back("VK_LAYER_LUNARG_parameter_validation");
+		validationLayerNames.push_back("VK_LAYER_LUNARG_object_tracker");
+		validationLayerNames.push_back("VK_LAYER_LUNARG_core_validation");
+		validationLayerNames.push_back("VK_LAYER_LUNARG_swapchain");
+		validationLayerNames.push_back("VK_LAYER_GOOGLE_unique_objects");
+#else
+		validationLayerNames.push_back("VK_LAYER_KHRONOS_validation");
 #endif
+#endif
+		instanceCreateInfo.enabledLayerCount = validationLayerNames.size();
+		instanceCreateInfo.ppEnabledLayerNames = validationLayerNames.data();
 	}
 	return vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
 }
