@@ -933,6 +933,9 @@ int32_t VulkanExampleBase::handleAppInput(struct android_app* app, AInputEvent* 
 				break;
 			}
 
+			// FIXME: Reusing code for TOUCHSCREEN seemingly works well for MOUSE event source,
+			// but it would be better to provide a dedicated event handling logic for MOUSE event source.
+			case AINPUT_SOURCE_MOUSE:
 			case AINPUT_SOURCE_TOUCHSCREEN: {
 				int32_t action = AMotionEvent_getAction(event);
 				int32_t pointerCount = AMotionEvent_getPointerCount(event);
