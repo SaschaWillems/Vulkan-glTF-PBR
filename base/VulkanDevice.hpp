@@ -13,6 +13,7 @@
 #include <exception>
 #include <assert.h>
 #include <algorithm>
+#include <cstring>
 #include <vector>
 #include "vulkan/vulkan.h"
 #include "macros.h"
