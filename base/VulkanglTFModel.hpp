@@ -652,6 +652,9 @@ namespace vkglTF
 			nodes.resize(0);
 			linearNodes.resize(0);
 			extensions.resize(0);
+			for (auto skin : skins) {
+				delete skin;
+			}
 			skins.resize(0);
 		};
 
