@@ -8,7 +8,6 @@ project(${NAME})
 
 include_directories(external)
 include_directories(external/glm)
-include_directories(external/gli)
 include_directories(external/imgui)
 include_directories(external/tinygltf)
 include_directories(base)
@@ -113,4 +112,5 @@ ENDIF(WIN32)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
 
 add_subdirectory(base)
+add_subdirectory(external)
 add_subdirectory(src)
