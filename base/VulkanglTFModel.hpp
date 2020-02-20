@@ -782,6 +782,10 @@ namespace vkglTF
 
 							vert.joint0 = hasSkin ? glm::vec4(glm::make_vec4(&bufferJoints[v * jointByteStride])) : glm::vec4(0.0f);
 							vert.weight0 = hasSkin ? glm::make_vec4(&bufferWeights[v * weightByteStride]) : glm::vec4(0.0f);
+							// Fix for all zero weights
+							if (glm::length(vert.weight0) == 0.0f) {
+								vert.weight0 = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+							}
 							vertexBuffer.push_back(vert);
 						}
 					}
