@@ -1344,6 +1344,10 @@ namespace vkglTF
 
 		void updateAnimation(uint32_t index, float time) 
 		{
+			if (animations.empty()) {
+				std::cout << ".glTF does not contain animation." << std::endl;
+				return;
+			}
 			if (index > static_cast<uint32_t>(animations.size()) - 1) {
 				std::cout << "No animation with index " << index << std::endl;
 				return;
