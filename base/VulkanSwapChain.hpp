@@ -34,7 +34,7 @@ private:
 	VkInstance instance;
 	VkDevice device;
 	VkPhysicalDevice physicalDevice;
-	VkSurfaceKHR surface;
+	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	// Function pointers
 	PFN_vkGetPhysicalDeviceSurfaceSupportKHR fpGetPhysicalDeviceSurfaceSupportKHR;
 	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR fpGetPhysicalDeviceSurfaceCapabilitiesKHR; 
@@ -445,6 +445,12 @@ public:
 	*/
 	VkResult acquireNextImage(VkSemaphore presentCompleteSemaphore, uint32_t *imageIndex)
 	{
+		if (swapChain == VK_NULL_HANDLE) {
+			// Probably acquireNextImage() is called just after cleanup() (e.g. window has been terminated on Android).
+			// todo : Use a dedicated error code.
+			return VK_ERROR_OUT_OF_DATE_KHR;
+		}
+
 		// By setting timeout to UINT64_MAX we will always wait until the next image has been acquired or an actual error is thrown
 		// With that we don't have to handle VK_NOT_READY
 		return fpAcquireNextImageKHR(device, swapChain, UINT64_MAX, presentCompleteSemaphore, (VkFence)nullptr, imageIndex);
