@@ -161,7 +161,7 @@ public:
 
 	VulkanExample() : VulkanExampleBase()
 	{
-		title = "Vulkan glTF 2.0 PBR - � Sascha Willems (www.saschawillems.de)";
+		title = "Vulkan glTF 2.0 PBR - (C) Sascha Willems (www.saschawillems.de)";
 #if defined(TINYGLTF_ENABLE_DRACO)
 		std::cout << "Draco mesh compression is enabled" << std::endl;
 #endif
@@ -2002,7 +2002,7 @@ public:
 				}
 			}
 			if ((animate) && (models.scene.animations.size() > 0)) {
-				animationTimer += frameTimer * 0.75f;
+				animationTimer += frameTimer;
 				if (animationTimer > models.scene.animations[animationIndex].end) {
 					animationTimer -= models.scene.animations[animationIndex].end;
 				}
