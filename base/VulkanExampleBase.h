@@ -25,6 +25,11 @@
 //
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
 #include <xcb/xcb.h>
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+#include <Cocoa/Cocoa.h>
+#include <Carbon/Carbon.h>
+#include <QuartzCore/CAMetalLayer.h>
+#include <CoreVideo/CVDisplayLink.h>
 #endif
 
 #include <iostream>
@@ -167,6 +172,8 @@ public:
 	xcb_screen_t *screen;
 	xcb_window_t window;
 	xcb_intern_atom_reply_t *atom_wm_delete_window;
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+	NSWindow* window;
 #endif
 
 #if defined(_WIN32)
@@ -223,6 +230,11 @@ public:
 	xcb_window_t setupWindow();
 	void initxcbConnection();
 	void handleEvent(const xcb_generic_event_t *event);
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+	NSWindow* setupWindow();
+	void mouseDragged(float x, float y);
+	void windowWillResize(float x, float y);
+	void windowDidResize();
 #endif
 
 	VulkanExampleBase();

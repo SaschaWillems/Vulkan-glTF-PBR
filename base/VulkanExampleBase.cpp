@@ -61,6 +61,8 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 	instanceExtensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
 	instanceExtensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+	instanceExtensions.push_back(VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
 #endif
 
 	VkInstanceCreateInfo instanceCreateInfo = {};
@@ -77,12 +79,12 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 	}
 	std::vector<const char *> validationLayerNames;
 	if (settings.validation) {
-#if !defined(__ANDROID__)
+#if !defined(__ANDROID__) && !defined(VK_USE_PLATFORM_MACOS_MVK)
 		validationLayerNames.push_back("VK_LAYER_LUNARG_standard_validation");
 #else
 		// Use `VK_LAYER_KHRONOS_valiation` for NDK r21 or later 
 		// https://developer.android.com/ndk/guides/graphics/validation-layer
-#if 1
+#if 1 && !defined(VK_USE_PLATFORM_MACOS_MVK)
 		validationLayerNames.push_back("VK_LAYER_GOOGLE_threading");
 		validationLayerNames.push_back("VK_LAYER_LUNARG_parameter_validation");
 		validationLayerNames.push_back("VK_LAYER_LUNARG_object_tracker");
@@ -477,6 +479,8 @@ void VulkanExampleBase::renderLoop()
 			frameCounter = 0;
 		}
 	}
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+	[NSApp run];
 #endif
 	// Flush device to make sure all resources can be freed 
 	vkDeviceWaitIdle(device);
@@ -1555,6 +1559,230 @@ void VulkanExampleBase::handleEvent(const xcb_generic_event_t *event)
 		break;
 	}
 }
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+@interface AppDelegate : NSObject<NSApplicationDelegate>
+{
+}
+
+@end
+
+@implementation AppDelegate
+{
+}
+
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
+{
+	return YES;
+}
+
+@end
+
+CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *inNow, const CVTimeStamp *inOutputTime,
+	CVOptionFlags flagsIn, CVOptionFlags *flagsOut, void *displayLinkContext)
+{
+	@autoreleasepool
+	{
+		auto vulkanExampleBase = static_cast<VulkanExampleBase*>(displayLinkContext);
+		vulkanExampleBase->renderFrame();
+	}
+	return kCVReturnSuccess;
+}
+
+@interface View : NSView<NSWindowDelegate>
+{
+@public
+	VulkanExampleBase* vulkanExampleBase;
+}
+
+@end
+
+@implementation View
+{
+	CVDisplayLinkRef displayLink;
+}
+
+- (instancetype)initWithFrame:(NSRect)frameRect
+{
+	self = [super initWithFrame:(frameRect)];
+	if (self)
+	{
+		self.wantsLayer = YES;
+		self.layer = [CAMetalLayer layer];
+	}
+	return self;
+}
+
+- (void)viewDidMoveToWindow
+{
+	CVDisplayLinkCreateWithActiveCGDisplays(&displayLink);
+	CVDisplayLinkSetOutputCallback(displayLink, &OnDisplayLinkOutput, vulkanExampleBase);
+	CVDisplayLinkStart(displayLink);
+}
+
+- (BOOL)acceptsFirstResponder
+{
+	return YES;
+}
+
+- (void)keyDown:(NSEvent*)event
+{
+	switch (event.keyCode)
+	{
+		case kVK_ANSI_P:
+			vulkanExampleBase->paused = !vulkanExampleBase->paused;
+			break;
+		case kVK_Escape:
+			[NSApp terminate:nil];
+			break;
+		default:
+			break;
+	}
+}
+
+- (void)keyUp:(NSEvent*)event
+{
+	if (vulkanExampleBase->camera.firstperson)
+	{
+		switch (event.keyCode)
+		{
+			case kVK_ANSI_W:
+				vulkanExampleBase->camera.keys.up = false;
+				break;
+			case kVK_ANSI_S:
+				vulkanExampleBase->camera.keys.down = false;
+				break;
+			case kVK_ANSI_A:
+				vulkanExampleBase->camera.keys.left = false;
+				break;
+			case kVK_ANSI_D:
+				vulkanExampleBase->camera.keys.right = false;
+				break;
+			default:
+				break;
+		}
+	}
+}
+
+- (void)mouseDown:(NSEvent *)event
+{
+	NSPoint location = [event locationInWindow];
+	NSPoint point = [self convertPoint:location fromView:nil];
+	vulkanExampleBase->mousePos = glm::vec2(point.x, point.y);
+	vulkanExampleBase->mouseButtons.left = true;
+}
+
+- (void)mouseUp:(NSEvent *)event
+{
+	NSPoint location = [event locationInWindow];
+	NSPoint point = [self convertPoint:location fromView:nil];
+	vulkanExampleBase->mousePos = glm::vec2(point.x, point.y);
+	vulkanExampleBase->mouseButtons.left = false;
+}
+
+- (void)otherMouseDown:(NSEvent *)event
+{
+	vulkanExampleBase->mouseButtons.right = true;
+}
+
+- (void)otherMouseUp:(NSEvent *)event
+{
+	vulkanExampleBase->mouseButtons.right = false;
+}
+
+- (void)mouseDragged:(NSEvent *)event
+{
+	NSPoint location = [event locationInWindow];
+	NSPoint point = [self convertPoint:location fromView:nil];
+	vulkanExampleBase->mouseDragged(point.x, point.y);
+}
+
+- (void)mouseMoved:(NSEvent *)event
+{
+	NSPoint location = [event locationInWindow];
+	NSPoint point = [self convertPoint:location fromView:nil];
+	vulkanExampleBase->mouseDragged(point.x, point.y);
+}
+
+- (void)scrollWheel:(NSEvent *)event
+{
+	short wheelDelta = [event deltaY];
+	vulkanExampleBase->camera.translate(glm::vec3(0.0f, 0.0f,
+		-(float)wheelDelta * 0.05f * vulkanExampleBase->camera.movementSpeed));
+}
+
+- (NSSize)windowWillResize:(NSWindow *)sender toSize:(NSSize)frameSize
+{
+	CVDisplayLinkStop(displayLink);
+	vulkanExampleBase->windowWillResize(frameSize.width, frameSize.height);
+	return frameSize;
+}
+
+- (void)windowDidResize:(NSNotification *)notification
+{
+	vulkanExampleBase->windowDidResize();
+	CVDisplayLinkStart(displayLink);
+}
+
+- (BOOL)windowShouldClose:(NSWindow *)sender
+{
+	return TRUE;
+}
+
+- (void)windowWillClose:(NSNotification *)notification
+{
+	CVDisplayLinkStop(displayLink);
+}
+
+@end
+
+NSWindow* VulkanExampleBase::setupWindow()
+{
+	NSApp = [NSApplication sharedApplication];
+	[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+	[NSApp setDelegate:[AppDelegate new]];
+
+	const auto kContentRect = NSMakeRect(0.0f, 0.0f, width, height);
+
+	window = [[NSWindow alloc] initWithContentRect:kContentRect
+										 styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
+										   backing:NSBackingStoreBuffered
+											 defer:NO];
+	[window setTitle:@(title.c_str())];
+	[window setAcceptsMouseMovedEvents:YES];
+	[window center];
+	[window makeKeyAndOrderFront:nil];
+
+	auto view = [[View alloc] initWithFrame:kContentRect];
+	view->vulkanExampleBase = this;
+
+	[window setDelegate:view];
+	[window setContentView:view];
+
+	return window;
+}
+
+void VulkanExampleBase::mouseDragged(float x, float y)
+{
+	handleMouseMove(static_cast<uint32_t>(x), static_cast<uint32_t>(y));
+}
+
+void VulkanExampleBase::windowWillResize(float x, float y)
+{
+	resizing = true;
+	if (prepared)
+	{
+		destWidth = x;
+		destHeight = y;
+		windowResize();
+	}
+	std::cout << "resize" << std::endl;
+}
+
+void VulkanExampleBase::windowDidResize()
+{
+	std::cout << "done" << std::endl;
+	resizing = false;
+}
 #endif
 
 void VulkanExampleBase::windowResized() {}
@@ -1809,6 +2037,8 @@ void VulkanExampleBase::initSwapchain()
 	swapChain.initSurface(display, surface);
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
 	swapChain.initSurface(connection, window);
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+	swapChain.initSurface((__bridge void*)[window contentView]);
 #endif
 }
 
