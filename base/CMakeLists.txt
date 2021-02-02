@@ -1,5 +1,5 @@
 file(GLOB BASE_SRC "*.cpp" "../external/imgui/*.cpp")
-file(GLOB BASE_HEADERS "*.hpp")
+file(GLOB BASE_HEADERS "*.hpp" "*.h")
 
 add_library(base STATIC ${BASE_SRC} ${BASE_HEADERS})
 

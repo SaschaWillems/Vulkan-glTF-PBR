@@ -25,7 +25,7 @@
 #include <vulkan/vulkan.h>
 #include "VulkanExampleBase.h"
 #include "VulkanTexture.hpp"
-#include "VulkanglTFModel.hpp"
+#include "VulkanglTFModel.h"
 #include "VulkanUtils.hpp"
 #include "ui.hpp"
 
