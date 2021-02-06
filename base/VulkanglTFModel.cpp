@@ -593,7 +593,9 @@ namespace vkglTF
 						return;
 					}
 				}					
+				// @todo: rework
 				Primitive *newPrimitive = new Primitive(indexStart, indexCount, vertexCount, primitive.material > -1 ? materials[primitive.material] : materials.back());
+				newPrimitive->materialIndex = primitive.material > -1 ? primitive.material : static_cast<int32_t>(materials.size()-1);
 				newPrimitive->setBoundingBox(posMin, posMax);
 				newMesh->primitives.push_back(newPrimitive);
 			}
@@ -761,11 +763,11 @@ namespace vkglTF
 			}
 			if (mat.additionalValues.find("emissiveFactor") != mat.additionalValues.end()) {
 				material.emissiveFactor = glm::vec4(glm::make_vec3(mat.additionalValues["emissiveFactor"].ColorFactor().data()), 1.0);
-				material.emissiveFactor = glm::vec4(0.0f);
 			}
 
 			// Extensions
 			// @TODO: Find out if there is a nicer way of reading these properties with recent tinygltf headers
+			// KHR_materials_pbrSpecularGlossiness
 			if (mat.extensions.find("KHR_materials_pbrSpecularGlossiness") != mat.extensions.end()) {
 				auto ext = mat.extensions.find("KHR_materials_pbrSpecularGlossiness");
 				if (ext->second.Has("specularGlossinessTexture")) {
@@ -792,6 +794,51 @@ namespace vkglTF
 						auto val = factor.Get(i);
 						material.extension.specularFactor[i] = val.IsNumber() ? (float)val.Get<double>() : (float)val.Get<int>();
 					}
+				}
+			}
+			// KHR_materials_sheen
+			if (mat.extensions.find("KHR_materials_sheen") != mat.extensions.end()) {
+				material.extensions.sheen.enabled = true;
+				auto ext = mat.extensions.find("KHR_materials_sheen");
+				if (ext->second.Has("sheenColorFactor")) {
+					auto value = ext->second.Get("sheenColorFactor");
+					for (uint32_t i = 0; i < value.ArrayLen(); i++) {
+						auto v = value.Get(i);
+						material.extensions.sheen.sheenColorFactor[i] = v.IsNumber() ? (float)v.Get<double>() : (float)v.Get<int>();
+					}
+				}
+				if (ext->second.Has("sheenRoughnessFactor")) {
+					auto value = ext->second.Get("sheenRoughnessFactor");
+					material.extensions.sheen.sheenRoughnessFactor = (float)value.Get<double>();
+				}
+			}
+			// KHR_materials_clearcoat
+			if (mat.extensions.find("KHR_materials_clearcoat") != mat.extensions.end()) {
+				material.extensions.clearcoat.enabled = true;
+				auto ext = mat.extensions.find("KHR_materials_clearcoat");
+				if (ext->second.Has("clearcoatFactor")) {
+					auto value = ext->second.Get("clearcoatFactor");
+					if (value.IsInt()) {
+						material.extensions.clearcoat.clearcoatFactor = (float)value.Get<int>();
+					} else {
+						material.extensions.clearcoat.clearcoatFactor = (float)value.Get<double>();
+					}
+				}
+				if (ext->second.Has("clearcoatRoughnessFactor")) {
+					auto value = ext->second.Get("clearcoatRoughnessFactor");
+					material.extensions.clearcoat.clearcoatRoughnessFactor = (float)value.Get<double>();
+				}
+				if (ext->second.Has("clearcoatTexture")) {
+					auto index = ext->second.Get("clearcoatTexture").Get("index");
+					material.extensions.clearcoat.clearcoatTexture = &textures[index.Get<int>()];
+				}
+				if (ext->second.Has("clearcoatRoughnessTexture")) {
+					auto index = ext->second.Get("clearcoatRoughnessTexture").Get("index");
+					material.extensions.clearcoat.clearcoatRoughnessTexture = &textures[index.Get<int>()];
+				}
+				if (ext->second.Has("clearcoatNormalTexture")) {
+					auto index = ext->second.Get("clearcoatNormalTexture").Get("index");
+					material.extensions.clearcoat.clearcoatNormalTexture = &textures[index.Get<int>()];
 				}
 			}
 

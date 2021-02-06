@@ -208,20 +208,21 @@ public:
 			for (auto&& surfaceFormat : surfaceFormats)
 			{
 				// Prefer SRGB
-				if (surfaceFormat.format == VK_FORMAT_B8G8R8A8_SRGB)
-				{
-					colorFormat = surfaceFormat.format;
-					colorSpace = surfaceFormat.colorSpace;
-					found_B8G8R8A8_UNORM = true;
-					break;
-				}
-				//if (surfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM)
+				// @todo
+				//if (surfaceFormat.format == VK_FORMAT_B8G8R8A8_SRGB)
 				//{
 				//	colorFormat = surfaceFormat.format;
 				//	colorSpace = surfaceFormat.colorSpace;
 				//	found_B8G8R8A8_UNORM = true;
 				//	break;
 				//}
+				if (surfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM)
+				{
+					colorFormat = surfaceFormat.format;
+					colorSpace = surfaceFormat.colorSpace;
+					found_B8G8R8A8_UNORM = true;
+					break;
+				}
 			}
 
 			// in case VK_FORMAT_B8G8R8A8_UNORM is not available

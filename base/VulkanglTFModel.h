@@ -109,6 +109,21 @@ namespace vkglTF
 			bool metallicRoughness = true;
 			bool specularGlossiness = false;
 		} pbrWorkflows;
+		struct Extensions {
+			struct Sheen {
+				bool enabled;
+				glm::vec3 sheenColorFactor;
+				float sheenRoughnessFactor;
+			} sheen;
+			struct Clearcoat {
+				bool enabled;
+				float clearcoatFactor;
+				float clearcoatRoughnessFactor;
+				vkglTF::Texture* clearcoatTexture;
+				vkglTF::Texture* clearcoatRoughnessTexture;
+				vkglTF::Texture* clearcoatNormalTexture;
+			} clearcoat;
+		} extensions;
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 	};
 
@@ -117,6 +132,7 @@ namespace vkglTF
 		uint32_t indexCount;
 		uint32_t vertexCount;
 		Material &material;
+		int32_t materialIndex;
 		bool hasIndices;
 		BoundingBox bb;
 		Primitive(uint32_t firstIndex, uint32_t indexCount, uint32_t vertexCount, Material& material);

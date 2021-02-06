@@ -44,6 +44,9 @@ public:
 		vks::TextureCubeMap environmentCube;
 		vks::Texture2D empty;
 		vks::Texture2D lutBrdf;
+		vks::Texture2D lutCharlie;
+		vks::Texture2D lutGGX;
+		vks::Texture2D lutThinFilm;
 		vks::TextureCubeMap irradianceCube;
 		vks::TextureCubeMap prefilteredCube;
 	} textures;
@@ -52,6 +55,8 @@ public:
 		vkglTF::Model scene;
 		vkglTF::Model skybox;
 	} models;
+
+	Buffer materialBuffer;
 
 	struct UniformBufferSet {
 		Buffer scene;
@@ -68,13 +73,18 @@ public:
 
 	struct shaderValuesParams {
 		glm::vec4 lightDir;
-		float exposure = 4.5f;
+		float exposure = 1.0f;
 		float gamma = 2.2f;
 		float prefilteredCubeMipLevels;
 		float scaleIBLAmbient = 1.0f;
 		float debugViewInputs = 0;
 		float debugViewEquation = 0;
+		int toneMapper = 0;
 	} shaderValuesParams;
+
+	int32_t debugViewInputs = shaderValuesParams.debugViewInputs;
+	int32_t debugViewEquation = 0;
+	int32_t toneMapper = 0;
 
 	VkPipelineLayout pipelineLayout;
 
@@ -110,7 +120,7 @@ public:
 	float animationTimer = 0.0f;
 	bool animate = true;
 
-	bool displayBackground = true;
+	bool displayBackground = false;
 	
 	struct LightSource {
 		glm::vec3 color = glm::vec3(1.0f);
@@ -131,22 +141,43 @@ public:
 
 	enum PBRWorkflows{ PBR_WORKFLOW_METALLIC_ROUGHNESS = 0, PBR_WORKFLOW_SPECULAR_GLOSINESS = 1 };
 
-	struct PushConstBlockMaterial {
+	struct ShaderMaterial {
 		glm::vec4 baseColorFactor;
 		glm::vec4 emissiveFactor;
 		glm::vec4 diffuseFactor;
 		glm::vec4 specularFactor;
+
 		float workflow;
 		int colorTextureSet;
 		int PhysicalDescriptorTextureSet;
 		int normalTextureSet;
+
 		int occlusionTextureSet;
 		int emissiveTextureSet;
 		float metallicFactor;
 		float roughnessFactor;
+
 		float alphaMask;
 		float alphaMaskCutoff;
-	} pushConstBlockMaterial;
+		float _pad0;
+		float _pad1;
+
+		glm::vec4 sheenColorFactorAndRoughness;
+
+		int materialType;
+		int hasMetallicRoughness;
+		int hasSpecularGlossiness;
+		int hasClearcoat;
+
+		glm::vec2 clearcoatFactorAndRoughness;
+		int clearcoatTextureSet;
+		int clearcoatRoughnessTextureSet;
+		
+		int clearcoatNormalTextureSet;
+		float _pad2;
+		float _pad3;
+		float _pad4;
+	};
 
 	std::map<std::string, std::string> environments;
 	std::string selectedEnvironment = "papermill";
@@ -155,9 +186,6 @@ public:
 	std::map<std::string, std::string> scenes;
 	std::string selectedScene = "DamagedHelmet";
 #endif
-
-	int32_t debugViewInputs = 0;
-	int32_t debugViewEquation = 0;
 
 	VulkanExample() : VulkanExampleBase()
 	{
@@ -218,40 +246,8 @@ public:
 					};
 					vkCmdBindDescriptorSets(commandBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
 
-					// Pass material parameters as push constants
-					PushConstBlockMaterial pushConstBlockMaterial{};					
-					pushConstBlockMaterial.emissiveFactor = primitive->material.emissiveFactor;
-					// To save push constant space, availabilty and texture coordiante set are combined
-					// -1 = texture not used for this material, >= 0 texture used and index of texture coordinate set
-					pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
-					pushConstBlockMaterial.normalTextureSet = primitive->material.normalTexture != nullptr ? primitive->material.texCoordSets.normal : -1;
-					pushConstBlockMaterial.occlusionTextureSet = primitive->material.occlusionTexture != nullptr ? primitive->material.texCoordSets.occlusion : -1;
-					pushConstBlockMaterial.emissiveTextureSet = primitive->material.emissiveTexture != nullptr ? primitive->material.texCoordSets.emissive : -1;
-					pushConstBlockMaterial.alphaMask = static_cast<float>(primitive->material.alphaMode == vkglTF::Material::ALPHAMODE_MASK);
-					pushConstBlockMaterial.alphaMaskCutoff = primitive->material.alphaCutoff;
-
-					// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
-
-					if (primitive->material.pbrWorkflows.metallicRoughness) {
-						// Metallic roughness workflow
-						pushConstBlockMaterial.workflow = static_cast<float>(PBR_WORKFLOW_METALLIC_ROUGHNESS);
-						pushConstBlockMaterial.baseColorFactor = primitive->material.baseColorFactor;
-						pushConstBlockMaterial.metallicFactor = primitive->material.metallicFactor;
-						pushConstBlockMaterial.roughnessFactor = primitive->material.roughnessFactor;
-						pushConstBlockMaterial.PhysicalDescriptorTextureSet = primitive->material.metallicRoughnessTexture != nullptr ? primitive->material.texCoordSets.metallicRoughness : -1;
-						pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
-					}
-
-					if (primitive->material.pbrWorkflows.specularGlossiness) {
-						// Specular glossiness workflow
-						pushConstBlockMaterial.workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSINESS);
-						pushConstBlockMaterial.PhysicalDescriptorTextureSet = primitive->material.extension.specularGlossinessTexture != nullptr ? primitive->material.texCoordSets.specularGlossiness : -1;
-						pushConstBlockMaterial.colorTextureSet = primitive->material.extension.diffuseTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
-						pushConstBlockMaterial.diffuseFactor = primitive->material.extension.diffuseFactor;
-						pushConstBlockMaterial.specularFactor = glm::vec4(primitive->material.extension.specularFactor, 1.0f);
-					}
-
-					vkCmdPushConstants(commandBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
+					// Pass material index (into material buffer) for this primitive
+					vkCmdPushConstants(commandBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(int32_t), &primitive->materialIndex);
 
 					if (primitive->hasIndices) {
 						vkCmdDrawIndexed(commandBuffers[cbIndex], primitive->indexCount, 1, primitive->firstIndex, 0, 0);
@@ -274,7 +270,7 @@ public:
 
 		VkClearValue clearValues[3];
 		if (settings.multiSampling) {
-			clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+			clearValues[0].color = { { 50.0f/255.0f, 50.0f / 255.0f, 50.0f / 255.0f, 1.0f } };
 			clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 			clearValues[2].depthStencil = { 1.0f, 0 };
 		}
@@ -303,7 +299,9 @@ public:
 
 			VkViewport viewport{};
 			viewport.width = (float)width;
-			viewport.height = (float)height;
+			// We use a negative viewport height to make conversions from the official glTF sample viewer a bit easier
+			viewport.height = -(float)height;
+			viewport.y = (float)height;
 			viewport.minDepth = 0.0f;
 			viewport.maxDepth = 1.0f;
 			vkCmdSetViewport(currentCB, 0, 1, &viewport);
@@ -345,6 +343,9 @@ public:
 			}
 
 			// User interface
+			viewport.height = (float)height;
+			viewport.y = 0;
+			vkCmdSetViewport(currentCB, 0, 1, &viewport);
 			ui->draw(currentCB);
 
 			vkCmdEndRenderPass(currentCB);
@@ -359,8 +360,70 @@ public:
 		animationIndex = 0;
 		animationTimer = 0.0f;
 		models.scene.loadFromFile(filename, vulkanDevice, queue);
+		// @todo:
+		if (!models.scene.extensions.empty()) {
+			std::cout << "Scene has the following extensions:\n";
+			for (auto& ext : models.scene.extensions) {
+				std::cout << " " << ext << "\n";
+			}
+		}
 		camera.setPosition({ 0.0f, 0.0f, 1.0f });
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
+		// Materials will be passed to the shaders as SSBOs
+		// @todo: move to model class
+		std::vector<ShaderMaterial> materials(models.scene.materials.size());
+		for (size_t i = 0; i < models.scene.materials.size(); i++) {
+			vkglTF::Material& m = models.scene.materials[i];
+			materials[i].emissiveFactor = m.emissiveFactor;
+			materials[i].colorTextureSet = m.baseColorTexture != nullptr ? m.texCoordSets.baseColor : -1;
+			materials[i].normalTextureSet = m.normalTexture != nullptr ? m.texCoordSets.normal : -1;
+			materials[i].occlusionTextureSet = m.occlusionTexture != nullptr ? m.texCoordSets.occlusion : -1;
+			materials[i].emissiveTextureSet = m.emissiveTexture != nullptr ? m.texCoordSets.emissive : -1;
+			materials[i].clearcoatTextureSet = -1;
+			materials[i].clearcoatRoughnessTextureSet = -1;
+			materials[i].clearcoatNormalTextureSet = -1;
+			materials[i].alphaMask = static_cast<float>(m.alphaMode == vkglTF::Material::ALPHAMODE_MASK);
+			materials[i].alphaMaskCutoff = m.alphaCutoff;
+
+			if (m.pbrWorkflows.metallicRoughness) {
+				// Metallic roughness workflow
+				materials[i].workflow = static_cast<float>(PBR_WORKFLOW_METALLIC_ROUGHNESS);
+				materials[i].baseColorFactor = m.baseColorFactor;
+				materials[i].metallicFactor = m.metallicFactor;
+				materials[i].roughnessFactor = m.roughnessFactor;
+				materials[i].PhysicalDescriptorTextureSet = m.metallicRoughnessTexture != nullptr ? m.texCoordSets.metallicRoughness : -1;
+				materials[i].colorTextureSet = m.baseColorTexture != nullptr ? m.texCoordSets.baseColor : -1;
+				materials[i].hasMetallicRoughness = true;
+			}
+
+			if (m.pbrWorkflows.specularGlossiness && !m.pbrWorkflows.metallicRoughness) {
+				// Specular glossiness workflow
+				materials[i].workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSINESS);
+				materials[i].PhysicalDescriptorTextureSet = m.extension.specularGlossinessTexture != nullptr ? m.texCoordSets.specularGlossiness : -1;
+				materials[i].colorTextureSet = m.extension.diffuseTexture != nullptr ? m.texCoordSets.baseColor : -1;
+				materials[i].diffuseFactor = m.extension.diffuseFactor;
+				materials[i].specularFactor = glm::vec4(m.extension.specularFactor, 1.0f);
+				materials[i].hasSpecularGlossiness = true;
+			}
+
+			if (m.extensions.clearcoat.enabled) {
+				materials[i].clearcoatFactorAndRoughness = glm::vec2(m.extensions.clearcoat.clearcoatFactor, m.extensions.clearcoat.clearcoatRoughnessFactor);
+				// @todo: clear coat texture sets
+				materials[i].clearcoatTextureSet = m.extensions.clearcoat.clearcoatTexture != nullptr ? 0 : -1;
+				materials[i].clearcoatRoughnessTextureSet = m.extensions.clearcoat.clearcoatRoughnessTexture != nullptr ? 0 : -1;
+				materials[i].clearcoatNormalTextureSet = m.extensions.clearcoat.clearcoatNormalTexture != nullptr ? 0 : -1;
+				materials[i].hasClearcoat = true;
+			}
+		}
+		// @todo: Stage to device
+		VK_CHECK_RESULT(vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			materials.size() * sizeof(ShaderMaterial),
+			&materialBuffer.buffer,
+			&materialBuffer.memory,
+			materials.data()));
+		materialBuffer.descriptor = { materialBuffer.buffer, 0, VK_WHOLE_SIZE };
 	}
 
 	void loadEnvironment(std::string filename)
@@ -392,6 +455,12 @@ public:
 		readDirectory(assetpath + "environments", "*.ktx", environments, false);
 
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
+
+		// Look-up-tables (converted to ktx from https://github.com/KhronosGroup/glTF-Sample-Viewer)
+		textures.lutBrdf.loadFromFile(assetpath + "textures/lut_brdf.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
+		textures.lutCharlie.loadFromFile(assetpath + "textures/lut_charlie.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
+		textures.lutGGX.loadFromFile(assetpath + "textures/lut_ggx.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
+		textures.lutThinFilm.loadFromFile(assetpath + "textures/lut_thin_film.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 
 		std::string sceneFile = assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf";
 		std::string envMapFile = assetpath + "environments/papermill.ktx";
@@ -454,8 +523,9 @@ public:
 		uint32_t materialCount = 0;
 		uint32_t meshCount = 0;
 
-		// Environment samplers (radiance, irradiance, brdf lut)
-		imageSamplerCount += 3;
+		// Environment samplers (radiance, irradiance, luts)
+		imageSamplerCount += 2;
+		imageSamplerCount += 4;
 
 		std::vector<vkglTF::Model*> modellist = { &models.skybox, &models.scene };
 		for (auto &model : modellist) {
@@ -493,6 +563,9 @@ public:
 				{ 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 				{ 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 				{ 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 			};
 			VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
 			descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -509,7 +582,7 @@ public:
 				descriptorSetAllocInfo.descriptorSetCount = 1;
 				VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets[i].scene));
 
-				std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};
+				std::array<VkWriteDescriptorSet, 8> writeDescriptorSets{};
 
 				writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -546,11 +619,32 @@ public:
 				writeDescriptorSets[4].dstBinding = 4;
 				writeDescriptorSets[4].pImageInfo = &textures.lutBrdf.descriptor;
 
+				writeDescriptorSets[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSets[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writeDescriptorSets[5].descriptorCount = 1;
+				writeDescriptorSets[5].dstSet = descriptorSets[i].scene;
+				writeDescriptorSets[5].dstBinding = 5;
+				writeDescriptorSets[5].pImageInfo = &textures.lutCharlie.descriptor;
+
+				writeDescriptorSets[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSets[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writeDescriptorSets[6].descriptorCount = 1;
+				writeDescriptorSets[6].dstSet = descriptorSets[i].scene;
+				writeDescriptorSets[6].dstBinding = 6;
+				writeDescriptorSets[6].pImageInfo = &textures.lutGGX.descriptor;
+
+				writeDescriptorSets[7].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSets[7].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writeDescriptorSets[7].descriptorCount = 1;
+				writeDescriptorSets[7].dstSet = descriptorSets[i].scene;
+				writeDescriptorSets[7].dstBinding = 7;
+				writeDescriptorSets[7].pImageInfo = &textures.lutThinFilm.descriptor;
+
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
 			}
 		}
 
-		// Material (samplers)
+		// Material (samplers and properties)
 		{
 			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
 				{ 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
@@ -558,6 +652,10 @@ public:
 				{ 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 				{ 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 				{ 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 8, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 			};
 			VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
 			descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -579,7 +677,10 @@ public:
 					textures.empty.descriptor,
 					material.normalTexture ? material.normalTexture->descriptor : textures.empty.descriptor,
 					material.occlusionTexture ? material.occlusionTexture->descriptor : textures.empty.descriptor,
-					material.emissiveTexture ? material.emissiveTexture->descriptor : textures.empty.descriptor
+					material.emissiveTexture ? material.emissiveTexture->descriptor : textures.empty.descriptor,
+					material.extensions.clearcoat.clearcoatTexture ? material.extensions.clearcoat.clearcoatTexture->descriptor : textures.empty.descriptor,
+					material.extensions.clearcoat.clearcoatRoughnessTexture ? material.extensions.clearcoat.clearcoatRoughnessTexture->descriptor : textures.empty.descriptor,
+					material.extensions.clearcoat.clearcoatNormalTexture ? material.extensions.clearcoat.clearcoatNormalTexture->descriptor : textures.empty.descriptor
 				};
 
 				// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
@@ -602,7 +703,7 @@ public:
 					}
 				}
 
-				std::array<VkWriteDescriptorSet, 5> writeDescriptorSets{};
+				std::array<VkWriteDescriptorSet, 9> writeDescriptorSets{};
 				for (size_t i = 0; i < imageDescriptors.size(); i++) {
 					writeDescriptorSets[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 					writeDescriptorSets[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -611,6 +712,14 @@ public:
 					writeDescriptorSets[i].dstBinding = static_cast<uint32_t>(i);
 					writeDescriptorSets[i].pImageInfo = &imageDescriptors[i];
 				}
+
+				const size_t lastIndex = writeDescriptorSets.size() - 1;
+				writeDescriptorSets[lastIndex].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSets[lastIndex].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				writeDescriptorSets[lastIndex].descriptorCount = 1;
+				writeDescriptorSets[lastIndex].dstSet = material.descriptorSet;
+				writeDescriptorSets[lastIndex].dstBinding = lastIndex;
+				writeDescriptorSets[lastIndex].pBufferInfo = &materialBuffer.descriptor;
 
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
 			}
@@ -664,7 +773,8 @@ public:
 			writeDescriptorSets[2].descriptorCount = 1;
 			writeDescriptorSets[2].dstSet = descriptorSets[i].skybox;
 			writeDescriptorSets[2].dstBinding = 2;
-			writeDescriptorSets[2].pImageInfo = &textures.prefilteredCube.descriptor;
+			//writeDescriptorSets[2].pImageInfo = &textures.prefilteredCube.descriptor;
+			writeDescriptorSets[2].pImageInfo = &textures.environmentCube.descriptor;
 
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, nullptr);
 		}
@@ -729,8 +839,9 @@ public:
 		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutCI.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
 		pipelineLayoutCI.pSetLayouts = setLayouts.data();
+		// Pass material index (into material buffer) for this primitive via a push constant
 		VkPushConstantRange pushConstantRange{};
-		pushConstantRange.size = sizeof(PushConstBlockMaterial);
+		pushConstantRange.size = sizeof(int32_t);
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 		pipelineLayoutCI.pushConstantRangeCount = 1;
 		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
@@ -776,6 +887,7 @@ public:
 		}
 
 		// Skybox pipeline (background cube)
+		rasterizationStateCI.cullMode = VK_CULL_MODE_FRONT_BIT;
 		shaderStages = {
 			loadShader(device, "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
 			loadShader(device, "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
@@ -786,9 +898,10 @@ public:
 		}
 
 		// PBR pipeline
+		rasterizationStateCI.cullMode = VK_CULL_MODE_BACK_BIT;
 		shaderStages = {
 			loadShader(device, "pbr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-			loadShader(device, "pbr_khr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
+			loadShader(device, "pbr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 		};
 		depthStencilStateCI.depthWriteEnable = VK_TRUE;
 		depthStencilStateCI.depthTestEnable = VK_TRUE;
@@ -808,266 +921,6 @@ public:
 		for (auto shaderStage : shaderStages) {
 			vkDestroyShaderModule(device, shaderStage.module, nullptr);
 		}
-	}
-
-	/*
-		Generate a BRDF integration map storing roughness/NdotV as a look-up-table
-	*/
-	void generateBRDFLUT()
-	{
-		auto tStart = std::chrono::high_resolution_clock::now();
-
-		const VkFormat format = VK_FORMAT_R16G16_SFLOAT;
-		const int32_t dim = 512;
-
-		// Image
-		VkImageCreateInfo imageCI{};
-		imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageCI.imageType = VK_IMAGE_TYPE_2D;
-		imageCI.format = format;
-		imageCI.extent.width = dim;
-		imageCI.extent.height = dim;
-		imageCI.extent.depth = 1;
-		imageCI.mipLevels = 1;
-		imageCI.arrayLayers = 1;
-		imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
-		imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
-		imageCI.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		VK_CHECK_RESULT(vkCreateImage(device, &imageCI, nullptr, &textures.lutBrdf.image));
-		VkMemoryRequirements memReqs;
-		vkGetImageMemoryRequirements(device, textures.lutBrdf.image, &memReqs);
-		VkMemoryAllocateInfo memAllocInfo{};
-		memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		memAllocInfo.allocationSize = memReqs.size;
-		memAllocInfo.memoryTypeIndex = vulkanDevice->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		VK_CHECK_RESULT(vkAllocateMemory(device, &memAllocInfo, nullptr, &textures.lutBrdf.deviceMemory));
-		VK_CHECK_RESULT(vkBindImageMemory(device, textures.lutBrdf.image, textures.lutBrdf.deviceMemory, 0));
-
-		// View
-		VkImageViewCreateInfo viewCI{};
-		viewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		viewCI.format = format;
-		viewCI.subresourceRange = {};
-		viewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		viewCI.subresourceRange.levelCount = 1;
-		viewCI.subresourceRange.layerCount = 1;
-		viewCI.image = textures.lutBrdf.image;
-		VK_CHECK_RESULT(vkCreateImageView(device, &viewCI, nullptr, &textures.lutBrdf.view));
-
-		// Sampler
-		VkSamplerCreateInfo samplerCI{};
-		samplerCI.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerCI.magFilter = VK_FILTER_LINEAR;
-		samplerCI.minFilter = VK_FILTER_LINEAR;
-		samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerCI.minLod = 0.0f;
-		samplerCI.maxLod = 1.0f;
-		samplerCI.maxAnisotropy = 1.0f;
-		samplerCI.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-		VK_CHECK_RESULT(vkCreateSampler(device, &samplerCI, nullptr, &textures.lutBrdf.sampler));
-
-		// FB, Att, RP, Pipe, etc.
-		VkAttachmentDescription attDesc{};
-		// Color attachment
-		attDesc.format = format;
-		attDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-		attDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		attDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		attDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		attDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		attDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		attDesc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		VkAttachmentReference colorReference = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-
-		VkSubpassDescription subpassDescription{};
-		subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-		subpassDescription.colorAttachmentCount = 1;
-		subpassDescription.pColorAttachments = &colorReference;
-
-		// Use subpass dependencies for layout transitions
-		std::array<VkSubpassDependency, 2> dependencies;
-		dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-		dependencies[0].dstSubpass = 0;
-		dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-		dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-		dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-		dependencies[1].srcSubpass = 0;
-		dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-		dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-		dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-		dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-		// Create the actual renderpass
-		VkRenderPassCreateInfo renderPassCI{};
-		renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassCI.attachmentCount = 1;
-		renderPassCI.pAttachments = &attDesc;
-		renderPassCI.subpassCount = 1;
-		renderPassCI.pSubpasses = &subpassDescription;
-		renderPassCI.dependencyCount = 2;
-		renderPassCI.pDependencies = dependencies.data();
-
-		VkRenderPass renderpass;
-		VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassCI, nullptr, &renderpass));
-
-		VkFramebufferCreateInfo framebufferCI{};
-		framebufferCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferCI.renderPass = renderpass;
-		framebufferCI.attachmentCount = 1;
-		framebufferCI.pAttachments = &textures.lutBrdf.view;
-		framebufferCI.width = dim;
-		framebufferCI.height = dim;
-		framebufferCI.layers = 1;
-
-		VkFramebuffer framebuffer;
-		VK_CHECK_RESULT(vkCreateFramebuffer(device, &framebufferCI, nullptr, &framebuffer));
-
-		// Desriptors
-		VkDescriptorSetLayout descriptorsetlayout;
-		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
-		descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorsetlayout));
-
-		// Pipeline layout
-		VkPipelineLayout pipelinelayout;
-		VkPipelineLayoutCreateInfo pipelineLayoutCI{};
-		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutCI.setLayoutCount = 1;
-		pipelineLayoutCI.pSetLayouts = &descriptorsetlayout;
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelinelayout));
-
-		// Pipeline
-		VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCI{};
-		inputAssemblyStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		inputAssemblyStateCI.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
-		VkPipelineRasterizationStateCreateInfo rasterizationStateCI{};
-		rasterizationStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		rasterizationStateCI.polygonMode = VK_POLYGON_MODE_FILL;
-		rasterizationStateCI.cullMode = VK_CULL_MODE_NONE;
-		rasterizationStateCI.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		rasterizationStateCI.lineWidth = 1.0f;
-
-		VkPipelineColorBlendAttachmentState blendAttachmentState{};
-		blendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-		blendAttachmentState.blendEnable = VK_FALSE;
-
-		VkPipelineColorBlendStateCreateInfo colorBlendStateCI{};
-		colorBlendStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		colorBlendStateCI.attachmentCount = 1;
-		colorBlendStateCI.pAttachments = &blendAttachmentState;
-
-		VkPipelineDepthStencilStateCreateInfo depthStencilStateCI{};
-		depthStencilStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencilStateCI.depthTestEnable = VK_FALSE;
-		depthStencilStateCI.depthWriteEnable = VK_FALSE;
-		depthStencilStateCI.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-		depthStencilStateCI.front = depthStencilStateCI.back;
-		depthStencilStateCI.back.compareOp = VK_COMPARE_OP_ALWAYS;
-
-		VkPipelineViewportStateCreateInfo viewportStateCI{};
-		viewportStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-		viewportStateCI.viewportCount = 1;
-		viewportStateCI.scissorCount = 1;
-
-		VkPipelineMultisampleStateCreateInfo multisampleStateCI{};
-		multisampleStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		multisampleStateCI.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-		std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-		VkPipelineDynamicStateCreateInfo dynamicStateCI{};
-		dynamicStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		dynamicStateCI.pDynamicStates = dynamicStateEnables.data();
-		dynamicStateCI.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
-		
-		VkPipelineVertexInputStateCreateInfo emptyInputStateCI{};
-		emptyInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-		std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
-
-		VkGraphicsPipelineCreateInfo pipelineCI{};
-		pipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineCI.layout = pipelinelayout;
-		pipelineCI.renderPass = renderpass;
-		pipelineCI.pInputAssemblyState = &inputAssemblyStateCI;
-		pipelineCI.pVertexInputState = &emptyInputStateCI;
-		pipelineCI.pRasterizationState = &rasterizationStateCI;
-		pipelineCI.pColorBlendState = &colorBlendStateCI;
-		pipelineCI.pMultisampleState = &multisampleStateCI;
-		pipelineCI.pViewportState = &viewportStateCI;
-		pipelineCI.pDepthStencilState = &depthStencilStateCI;
-		pipelineCI.pDynamicState = &dynamicStateCI;
-		pipelineCI.stageCount = 2;
-		pipelineCI.pStages = shaderStages.data();
-
-		// Look-up-table (from BRDF) pipeline		
-		shaderStages = {
-			loadShader(device, "genbrdflut.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-			loadShader(device, "genbrdflut.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
-		};
-		VkPipeline pipeline;
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipeline));
-		for (auto shaderStage : shaderStages) {
-			vkDestroyShaderModule(device, shaderStage.module, nullptr);
-		}
-
-		// Render
-		VkClearValue clearValues[1];
-		clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-
-		VkRenderPassBeginInfo renderPassBeginInfo{};
-		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassBeginInfo.renderPass = renderpass;
-		renderPassBeginInfo.renderArea.extent.width = dim;
-		renderPassBeginInfo.renderArea.extent.height = dim;
-		renderPassBeginInfo.clearValueCount = 1;
-		renderPassBeginInfo.pClearValues = clearValues;
-		renderPassBeginInfo.framebuffer = framebuffer;
-
-		VkCommandBuffer cmdBuf = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-		vkCmdBeginRenderPass(cmdBuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-		VkViewport viewport{};
-		viewport.width = (float)dim;
-		viewport.height = (float)dim;
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-
-		VkRect2D scissor{};
-		scissor.extent.width = dim;
-		scissor.extent.height = dim;
-
-		vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
-		vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
-		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-		vkCmdDraw(cmdBuf, 3, 1, 0, 0);
-		vkCmdEndRenderPass(cmdBuf);
-		vulkanDevice->flushCommandBuffer(cmdBuf, queue);
-
-		vkQueueWaitIdle(queue);
-
-		vkDestroyPipeline(device, pipeline, nullptr);
-		vkDestroyPipelineLayout(device, pipelinelayout, nullptr);
-		vkDestroyRenderPass(device, renderpass, nullptr);
-		vkDestroyFramebuffer(device, framebuffer, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorsetlayout, nullptr);
-
-		textures.lutBrdf.descriptor.imageView = textures.lutBrdf.view;
-		textures.lutBrdf.descriptor.sampler = textures.lutBrdf.sampler;
-		textures.lutBrdf.descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		textures.lutBrdf.device = vulkanDevice;
-
-		auto tEnd = std::chrono::high_resolution_clock::now();
-		auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-		std::cout << "Generating BRDF LUT took " << tDiff << " ms" << std::endl;
 	}
 
 	/*
@@ -1663,8 +1516,8 @@ public:
 
 		shaderValuesScene.camPos = glm::vec3(
 			-camera.position.z * sin(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x)),
-			-camera.position.z * sin(glm::radians(camera.rotation.x)),
-			 camera.position.z * cos(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x))
+			camera.position.z * sin(glm::radians(camera.rotation.x)),
+			camera.position.z * cos(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x))
 		);
 
 		// Skybox
@@ -1733,7 +1586,7 @@ public:
 		}
 
 		loadAssets();
-		generateBRDFLUT();
+		//generateBRDFLUT();
 		generateCubemaps();
 		prepareUniformBuffers();
 		setupDescriptors();
@@ -1849,9 +1702,35 @@ public:
 			}
 		}
 
+		const std::vector<std::string> toneMappers = {
+			"sRGB", "Uncharted 2", "Hejl Richard", "Aces"
+		};
+		if (ui->combo("Tone mapping", &toneMapper, toneMappers)) {
+			shaderValuesParams.toneMapper = toneMapper;
+			updateShaderParams = true;
+		}
+
 		if (ui->header("Debug view")) {
 			const std::vector<std::string> debugNamesInputs = {
-				"none", "Base color", "Normal", "Occlusion", "Emissive", "Metallic", "Roughness"
+				"None",
+				"Metallic",
+				"Roughness",
+				"Normal",
+				"Tangent",
+				"Bitangent",
+				"Base Color",
+				"Occlusion",
+				"Emissive",
+				"Diffuse",
+				"Specular",
+				"Thickness",
+				"ClearCoat",
+				"Sheen",
+				"Subsurface",
+				"Transmission",
+				"Alpha",
+				"F0"
+				//"none", "Base color", "Normal", "Occlusion", "Emissive", "Metallic", "Roughness"
 			};
 			if (ui->combo("Inputs", &debugViewInputs, debugNamesInputs)) {
 				shaderValuesParams.debugViewInputs = debugViewInputs;
