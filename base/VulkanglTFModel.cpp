@@ -481,7 +481,7 @@ namespace vkglTF
 					const float *bufferNormals = nullptr;
 					const float *bufferTexCoordSet0 = nullptr;
 					const float *bufferTexCoordSet1 = nullptr;
-					const uint16_t *bufferJoints = nullptr;
+					const void *bufferJoints = nullptr;
 					const float *bufferWeights = nullptr;
 
 					int posByteStride;
@@ -490,6 +490,8 @@ namespace vkglTF
 					int uv1ByteStride;
 					int jointByteStride;
 					int weightByteStride;
+
+					int jointComponentType;
 
 					// Position attribute is required
 					assert(primitive.attributes.find("POSITION") != primitive.attributes.end());
@@ -527,8 +529,9 @@ namespace vkglTF
 					if (primitive.attributes.find("JOINTS_0") != primitive.attributes.end()) {
 						const tinygltf::Accessor &jointAccessor = model.accessors[primitive.attributes.find("JOINTS_0")->second];
 						const tinygltf::BufferView &jointView = model.bufferViews[jointAccessor.bufferView];
-						bufferJoints = reinterpret_cast<const uint16_t *>(&(model.buffers[jointView.buffer].data[jointAccessor.byteOffset + jointView.byteOffset]));
-						jointByteStride = jointAccessor.ByteStride(jointView) ? (jointAccessor.ByteStride(jointView) / sizeof(bufferJoints[0])) : tinygltf::GetTypeSizeInBytes(TINYGLTF_TYPE_VEC4);
+						bufferJoints = &(model.buffers[jointView.buffer].data[jointAccessor.byteOffset + jointView.byteOffset]);
+						jointComponentType = jointAccessor.componentType;
+						jointByteStride = jointAccessor.ByteStride(jointView) ? (jointAccessor.ByteStride(jointView) / tinygltf::GetComponentSizeInBytes(jointComponentType)) : tinygltf::GetTypeSizeInBytes(TINYGLTF_TYPE_VEC4);
 					}
 
 					if (primitive.attributes.find("WEIGHTS_0") != primitive.attributes.end()) {
@@ -547,7 +550,28 @@ namespace vkglTF
 						vert.uv0 = bufferTexCoordSet0 ? glm::make_vec2(&bufferTexCoordSet0[v * uv0ByteStride]) : glm::vec3(0.0f);
 						vert.uv1 = bufferTexCoordSet1 ? glm::make_vec2(&bufferTexCoordSet1[v * uv1ByteStride]) : glm::vec3(0.0f);
 
-						vert.joint0 = hasSkin ? glm::vec4(glm::make_vec4(&bufferJoints[v * jointByteStride])) : glm::vec4(0.0f);
+						if (hasSkin)
+						{
+							switch (jointComponentType) {
+							case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
+								const uint16_t *buf = static_cast<const uint16_t*>(bufferJoints);
+								vert.joint0 = glm::vec4(glm::make_vec4(&buf[v * jointByteStride]));
+								break;
+							}
+							case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
+								const uint8_t *buf = static_cast<const uint8_t*>(bufferJoints);
+								vert.joint0 = glm::vec4(glm::make_vec4(&buf[v * jointByteStride]));
+								break;
+							}
+							default:
+								// Not supported by spec
+								std::cerr << "Joint component type " << jointComponentType << " not supported!" << std::endl;
+								break;
+							}
+						}
+						else {
+							vert.joint0 = glm::vec4(0.0f);
+						}
 						vert.weight0 = hasSkin ? glm::make_vec4(&bufferWeights[v * weightByteStride]) : glm::vec4(0.0f);
 						// Fix for all zero weights
 						if (glm::length(vert.weight0) == 0.0f) {
