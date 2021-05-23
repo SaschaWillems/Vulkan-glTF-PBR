@@ -401,10 +401,12 @@ namespace vkglTF
 		if (vertices.buffer != VK_NULL_HANDLE) {
 			vkDestroyBuffer(device, vertices.buffer, nullptr);
 			vkFreeMemory(device, vertices.memory, nullptr);
+			vertices.buffer = VK_NULL_HANDLE;
 		}
 		if (indices.buffer != VK_NULL_HANDLE) {
 			vkDestroyBuffer(device, indices.buffer, nullptr);
 			vkFreeMemory(device, indices.memory, nullptr);
+			indices.buffer = VK_NULL_HANDLE;
 		}
 		for (auto texture : textures) {
 			texture.destroy();
