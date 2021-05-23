@@ -505,6 +505,23 @@ public:
 	}
 
 #if defined(_DIRECT2DISPLAY)
+
+    void exitFatal(const std::string& message, int32_t exitCode)
+    {
+    #if defined(_WIN32)
+      if (!errorModeSilent) {
+                  MessageBox(NULL, message.c_str(), NULL, MB_OK | MB_ICONERROR);
+              }
+    #elif defined(__ANDROID__)
+      LOGE("Fatal error: %s", message.c_str());
+              vks::android::showAlert(message.c_str());
+    #endif
+      std::cerr << message << "\n";
+    #if !defined(__ANDROID__)
+      exit(exitCode);
+    #endif
+    }
+
 	/**
 	* Create direct to display surface
 	*/	
@@ -556,7 +573,7 @@ public:
 
 		if(!foundMode)
 		{
-			vks::tools::exitFatal("Can't find a display and a display mode!", -1);
+			exitFatal("Can't find a display and a display mode!", -1);
 			return;
 		}
 
@@ -593,7 +610,7 @@ public:
 
 		if(bestPlaneIndex == UINT32_MAX)
 		{
-			vks::tools::exitFatal("Can't find a plane for displaying!", -1);
+			exitFatal("Can't find a plane for displaying!", -1);
 			return;
 		}
 
@@ -633,7 +650,7 @@ public:
 
 		VkResult result = vkCreateDisplayPlaneSurfaceKHR(instance, &surfaceInfo, NULL, &surface);
 		if (result !=VK_SUCCESS) {
-			vks::tools::exitFatal("Failed to create surface!", result);
+			exitFatal("Failed to create surface!", result);
 		}
 
 		delete[] pDisplays;
