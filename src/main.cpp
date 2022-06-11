@@ -1,10 +1,10 @@
 /*
-* Vulkan physical based rendering glTF 2.0 demo
-*
-* Copyright (C) 2018 by Sascha Willems - www.saschawillems.de
-*
-* This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
-*/
+ * Vulkan physical based rendering glTF 2.0 renderer
+ *
+ * Copyright (C) 2018-2022 by Sascha Willems - www.saschawillems.de
+ *
+ * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
+ */
 
 // glTF format: https://github.com/KhronosGroup/glTF
 // tinyglTF loader: https://github.com/syoyo/tinygltf
@@ -358,7 +358,10 @@ public:
 		models.scene.destroy(device);
 		animationIndex = 0;
 		animationTimer = 0.0f;
+		auto tStart = std::chrono::high_resolution_clock::now();
 		models.scene.loadFromFile(filename, vulkanDevice, queue);
+		auto tFileLoad = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - tStart).count();
+		std::cout << "Loading took " << tFileLoad << " ms" << std::endl;
 		camera.setPosition({ 0.0f, 0.0f, 1.0f });
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 	}
