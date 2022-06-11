@@ -235,8 +235,16 @@ namespace vkglTF
 			glm::vec3 max = glm::vec3(-FLT_MAX);
 		} dimensions;
 
+		struct LoaderInfo {
+			uint32_t* indexBuffer;
+			Vertex* vertexBuffer;
+			size_t indexPos = 0;
+			size_t vertexPos = 0;
+		};
+
 		void destroy(VkDevice device);
-		void loadNode(vkglTF::Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, const tinygltf::Model& model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale);
+		void loadNode(vkglTF::Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, const tinygltf::Model& model, LoaderInfo& loaderInfo, float globalscale);
+		void getNodeProps(const tinygltf::Node& node, const tinygltf::Model& model, size_t& vertexCount, size_t& indexCount);
 		void loadSkins(tinygltf::Model& gltfModel);
 		void loadTextures(tinygltf::Model& gltfModel, vks::VulkanDevice* device, VkQueue transferQueue);
 		VkSamplerAddressMode getVkWrapMode(int32_t wrapMode);
