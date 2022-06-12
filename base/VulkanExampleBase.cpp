@@ -79,22 +79,7 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 	}
 	std::vector<const char *> validationLayerNames;
 	if (settings.validation) {
-#if !defined(__ANDROID__) && !defined(VK_USE_PLATFORM_MACOS_MVK)
-		validationLayerNames.push_back("VK_LAYER_LUNARG_standard_validation");
-#else
-		// Use `VK_LAYER_KHRONOS_valiation` for NDK r21 or later 
-		// https://developer.android.com/ndk/guides/graphics/validation-layer
-#if 1 && !defined(VK_USE_PLATFORM_MACOS_MVK)
-		validationLayerNames.push_back("VK_LAYER_GOOGLE_threading");
-		validationLayerNames.push_back("VK_LAYER_LUNARG_parameter_validation");
-		validationLayerNames.push_back("VK_LAYER_LUNARG_object_tracker");
-		validationLayerNames.push_back("VK_LAYER_LUNARG_core_validation");
-		validationLayerNames.push_back("VK_LAYER_LUNARG_swapchain");
-		validationLayerNames.push_back("VK_LAYER_GOOGLE_unique_objects");
-#else
 		validationLayerNames.push_back("VK_LAYER_KHRONOS_validation");
-#endif
-#endif
 		instanceCreateInfo.enabledLayerCount = validationLayerNames.size();
 		instanceCreateInfo.ppEnabledLayerNames = validationLayerNames.data();
 	}
