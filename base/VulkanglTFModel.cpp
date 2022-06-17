@@ -808,7 +808,6 @@ namespace vkglTF
 			}
 			if (mat.additionalValues.find("emissiveFactor") != mat.additionalValues.end()) {
 				material.emissiveFactor = glm::vec4(glm::make_vec3(mat.additionalValues["emissiveFactor"].ColorFactor().data()), 1.0);
-				material.emissiveFactor = glm::vec4(0.0f);
 			}
 
 			// Extensions
