@@ -81,8 +81,10 @@ public:
 	struct Pipelines {
 		VkPipeline skybox;
 		VkPipeline pbr;
+		VkPipeline pbrDoubleSided;
 		VkPipeline pbrAlphaBlend;
 	} pipelines;
+	VkPipeline boundPipeline = VK_NULL_HANDLE;
 
 	struct DescriptorSetLayouts {
 		VkDescriptorSetLayout scene;
@@ -211,6 +213,22 @@ public:
 			for (vkglTF::Primitive * primitive : node->mesh->primitives) {
 				if (primitive->material.alphaMode == alphaMode) {
 
+					VkPipeline pipeline = VK_NULL_HANDLE;
+					switch (alphaMode) {
+					case vkglTF::Material::ALPHAMODE_OPAQUE:
+					case vkglTF::Material::ALPHAMODE_MASK:
+						pipeline = primitive->material.doubleSided ? pipelines.pbrDoubleSided : pipelines.pbr;
+						break;
+					case vkglTF::Material::ALPHAMODE_BLEND:
+						pipeline = pipelines.pbrAlphaBlend;
+						break;
+					}
+
+					if (pipeline != boundPipeline) {
+						vkCmdBindPipeline(commandBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+						boundPipeline = pipeline;
+					}
+
 					const std::vector<VkDescriptorSet> descriptorsets = {
 						descriptorSets[cbIndex].scene,
 						primitive->material.descriptorSet,
@@ -320,14 +338,14 @@ public:
 				models.skybox.draw(currentCB);
 			}
 
-			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbr);
-
 			vkglTF::Model &model = models.scene;
 
 			vkCmdBindVertexBuffers(currentCB, 0, 1, &model.vertices.buffer, offsets);
 			if (model.indices.buffer != VK_NULL_HANDLE) {
 				vkCmdBindIndexBuffer(currentCB, model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 			}
+
+			boundPipeline = VK_NULL_HANDLE;
 
 			// Opaque primitives first
 			for (auto node : model.nodes) {
@@ -339,7 +357,6 @@ public:
 			}
 			// Transparent primitives
 			// TODO: Correct depth sorting
-			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.pbrAlphaBlend);
 			for (auto node : model.nodes) {
 				renderNode(node, i, vkglTF::Material::ALPHAMODE_BLEND);
 			}
@@ -796,6 +813,8 @@ public:
 		depthStencilStateCI.depthWriteEnable = VK_TRUE;
 		depthStencilStateCI.depthTestEnable = VK_TRUE;
 		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.pbr));
+		rasterizationStateCI.cullMode = VK_CULL_MODE_NONE;
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.pbrDoubleSided));
 
 		rasterizationStateCI.cullMode = VK_CULL_MODE_NONE;
 		blendAttachmentState.blendEnable = VK_TRUE;

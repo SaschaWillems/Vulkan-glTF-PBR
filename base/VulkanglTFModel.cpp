@@ -764,6 +764,7 @@ namespace vkglTF
 	{
 		for (tinygltf::Material &mat : gltfModel.materials) {
 			vkglTF::Material material{};
+			material.doubleSided = mat.doubleSided;
 			if (mat.values.find("baseColorTexture") != mat.values.end()) {
 				material.baseColorTexture = &textures[mat.values["baseColorTexture"].TextureIndex()];
 				material.texCoordSets.baseColor = mat.values["baseColorTexture"].TextureTexCoord();

@@ -91,6 +91,7 @@ namespace vkglTF
 		vkglTF::Texture *normalTexture;
 		vkglTF::Texture *occlusionTexture;
 		vkglTF::Texture *emissiveTexture;
+		bool doubleSided = false;
 		struct TexCoordSets {
 			uint8_t baseColor = 0;
 			uint8_t metallicRoughness = 0;
