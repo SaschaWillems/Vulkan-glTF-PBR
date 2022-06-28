@@ -1,7 +1,7 @@
 /**
  * Vulkan glTF model and texture loading class based on tinyglTF (https://github.com/syoyo/tinygltf)
  *
- * Copyright (C) 2018-2021 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2022 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -206,6 +206,7 @@ namespace vkglTF
 			glm::vec2 uv1;
 			glm::vec4 joint0;
 			glm::vec4 weight0;
+			glm::vec4 color;
 		};
 
 		struct Vertices {

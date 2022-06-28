@@ -1,7 +1,7 @@
 /**
  * Vulkan glTF model and texture loading class based on tinyglTF (https://github.com/syoyo/tinygltf)
  *
- * Copyright (C) 2018-2021 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2022 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -482,6 +482,7 @@ namespace vkglTF
 					const float *bufferNormals = nullptr;
 					const float *bufferTexCoordSet0 = nullptr;
 					const float *bufferTexCoordSet1 = nullptr;
+					const float* bufferColorSet0 = nullptr;
 					const void *bufferJoints = nullptr;
 					const float *bufferWeights = nullptr;
 
@@ -489,6 +490,7 @@ namespace vkglTF
 					int normByteStride;
 					int uv0ByteStride;
 					int uv1ByteStride;
+					int color0ByteStride;
 					int jointByteStride;
 					int weightByteStride;
 
@@ -512,6 +514,7 @@ namespace vkglTF
 						normByteStride = normAccessor.ByteStride(normView) ? (normAccessor.ByteStride(normView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC3);
 					}
 
+					// UVs
 					if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
 						const tinygltf::Accessor &uvAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
 						const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
@@ -523,6 +526,14 @@ namespace vkglTF
 						const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
 						bufferTexCoordSet1 = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
 						uv1ByteStride = uvAccessor.ByteStride(uvView) ? (uvAccessor.ByteStride(uvView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC2);
+					}
+
+					// Vertex colors
+					if (primitive.attributes.find("COLOR_0") != primitive.attributes.end()) {
+						const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("COLOR_0")->second];
+						const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+						bufferColorSet0 = reinterpret_cast<const float*>(&(model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+						color0ByteStride = accessor.ByteStride(view) ? (accessor.ByteStride(view) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC3);
 					}
 
 					// Skinning
@@ -550,6 +561,7 @@ namespace vkglTF
 						vert.normal = glm::normalize(glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * normByteStride]) : glm::vec3(0.0f)));
 						vert.uv0 = bufferTexCoordSet0 ? glm::make_vec2(&bufferTexCoordSet0[v * uv0ByteStride]) : glm::vec3(0.0f);
 						vert.uv1 = bufferTexCoordSet1 ? glm::make_vec2(&bufferTexCoordSet1[v * uv1ByteStride]) : glm::vec3(0.0f);
+						vert.color = bufferColorSet0 ? glm::make_vec4(&bufferColorSet0[v * color0ByteStride]) : glm::vec4(1.0f);
 
 						if (hasSkin)
 						{
