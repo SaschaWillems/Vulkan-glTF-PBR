@@ -399,7 +399,7 @@ public:
 		std::string sceneFile = assetpath + "models/DamagedHelmet/glTF-Embedded/DamagedHelmet.gltf";
 		std::string envMapFile = assetpath + "environments/papermill.ktx";
 		for (size_t i = 0; i < args.size(); i++) {
-			if (std::string(args[i]).find(".gltf") != std::string::npos) {
+			if ((std::string(args[i]).find(".gltf") != std::string::npos) || (std::string(args[i]).find(".glb") != std::string::npos)) {
 				std::ifstream file(args[i]);
 				if (file.good()) {
 					sceneFile = args[i];
