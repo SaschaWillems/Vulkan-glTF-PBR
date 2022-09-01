@@ -297,6 +297,8 @@ void VulkanExampleBase::prepare()
 	setupFrameBuffer();
 }
 
+void VulkanExampleBase::fileDropped(std::string filename) { }
+
 void VulkanExampleBase::renderFrame()
 {
 	auto tStart = std::chrono::high_resolution_clock::now();
@@ -766,7 +768,7 @@ HWND VulkanExampleBase::setupWindow(HINSTANCE hinstance, WNDPROC wndproc)
 
 	AdjustWindowRectEx(&windowRect, dwStyle, FALSE, dwExStyle);
 
-	window = CreateWindowEx(0,
+	window = CreateWindowEx(WS_EX_ACCEPTFILES,
 		name.c_str(),
 		title.c_str(),
 		dwStyle | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
@@ -909,6 +911,23 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 	case WM_EXITSIZEMOVE:
 		resizing = false;
 		break;
+	case WM_DROPFILES:
+		{
+			std::string fname;
+			HDROP hDrop = reinterpret_cast<HDROP>(wParam);
+			// extract files here
+			char filename[MAX_PATH];
+			uint32_t count = DragQueryFileA(hDrop, -1, nullptr, 0);
+			for (uint32_t i = 0; i < count; ++i) {
+				if (DragQueryFileA(hDrop, i, filename, MAX_PATH)) {
+					fname = filename;
+				}
+				break;
+			}
+			DragFinish(hDrop);
+			fileDropped(fname);
+			break;
+		}
 	}
 }
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)

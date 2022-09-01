@@ -247,6 +247,7 @@ public:
 	virtual void windowResized();
 	virtual void setupFrameBuffer();
 	virtual void prepare();
+	virtual void fileDropped(std::string filename);
 
 	void initSwapchain();
 	void setupSwapChain();

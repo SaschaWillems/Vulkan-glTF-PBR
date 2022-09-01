@@ -2040,6 +2040,15 @@ public:
 			updateUniformBuffers();
 		}
 	}
+
+	virtual void fileDropped(std::string filename)
+	{
+		vkDeviceWaitIdle(device);
+		loadScene(filename);
+		setupDescriptors();
+		recordCommandBuffers();
+	}
+
 };
 
 VulkanExample *vulkanExample;
