@@ -15,6 +15,7 @@ add_library(
     ${BASE_DIR}/VulkanAndroid.cpp
     ${BASE_DIR}/VulkanExampleBase.cpp
     ${BASE_DIR}/VulkanTexture.hpp
+    ${BASE_DIR}/VulkanglTFModel.cpp
     ${EXTERNAL_DIR}/imgui/imgui_draw.cpp
 )
 

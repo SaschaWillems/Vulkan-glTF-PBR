@@ -21,6 +21,10 @@
 #include <vulkan/vulkan_beta.h>
 #endif
 
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+#include "VulkanAndroid.h"
+#endif
+
 #include "macros.h"
 
 namespace vks
