@@ -18,10 +18,6 @@
 #include <map>
 #include "algorithm"
 
-#if defined(__ANDROID__)
-#define TINYGLTF_ANDROID_LOAD_FROM_ASSETS
-#endif
-
 #include <vulkan/vulkan.h>
 #include "VulkanExampleBase.h"
 #include "VulkanTexture.hpp"
