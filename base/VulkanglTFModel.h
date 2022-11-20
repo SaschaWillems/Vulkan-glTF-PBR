@@ -214,7 +214,6 @@ namespace vkglTF
 			VkDeviceMemory memory;
 		} vertices;
 		struct Indices {
-			int count;
 			VkBuffer buffer = VK_NULL_HANDLE;
 			VkDeviceMemory memory;
 		} indices;
