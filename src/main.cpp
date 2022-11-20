@@ -311,7 +311,7 @@ public:
 		renderPassBeginInfo.clearValueCount = settings.multiSampling ? 3 : 2;
 		renderPassBeginInfo.pClearValues = clearValues;
 
-		for (size_t i = 0; i < commandBuffers.size(); ++i) {
+		for (uint32_t i = 0; i < commandBuffers.size(); ++i) {
 			renderPassBeginInfo.framebuffer = frameBuffers[i];
 
 			VkCommandBuffer currentCB = commandBuffers[i];
@@ -1877,14 +1877,14 @@ public:
 				"none", "Base color", "Normal", "Occlusion", "Emissive", "Metallic", "Roughness"
 			};
 			if (ui->combo("Inputs", &debugViewInputs, debugNamesInputs)) {
-				shaderValuesParams.debugViewInputs = debugViewInputs;
+				shaderValuesParams.debugViewInputs = static_cast<float>(debugViewInputs);
 				updateShaderParams = true;
 			}
 			const std::vector<std::string> debugNamesEquation = {
 				"none", "Diff (l,n)", "F (l,h)", "G (l,v,h)", "D (h)", "Specular"
 			};
 			if (ui->combo("PBR equation", &debugViewEquation, debugNamesEquation)) {
-				shaderValuesParams.debugViewEquation = debugViewEquation;
+				shaderValuesParams.debugViewEquation = static_cast<float>(debugViewEquation);
 				updateShaderParams = true;
 			}
 		}

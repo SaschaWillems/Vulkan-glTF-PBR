@@ -90,7 +90,7 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 	std::vector<const char *> validationLayerNames;
 	if (settings.validation) {
 		validationLayerNames.push_back("VK_LAYER_KHRONOS_validation");
-		instanceCreateInfo.enabledLayerCount = validationLayerNames.size();
+		instanceCreateInfo.enabledLayerCount = (uint32_t)validationLayerNames.size();
 		instanceCreateInfo.ppEnabledLayerNames = validationLayerNames.data();
 	}
 	return vkCreateInstance(&instanceCreateInfo, nullptr, &instance);

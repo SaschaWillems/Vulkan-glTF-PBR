@@ -468,8 +468,8 @@ namespace vkglTF
 			Mesh *newMesh = new Mesh(device, newNode->matrix);
 			for (size_t j = 0; j < mesh.primitives.size(); j++) {
 				const tinygltf::Primitive &primitive = mesh.primitives[j];
-				uint32_t vertexStart = loaderInfo.vertexPos;					
-				uint32_t indexStart = loaderInfo.indexPos;
+				uint32_t vertexStart = static_cast<uint32_t>(loaderInfo.vertexPos);
+				uint32_t indexStart = static_cast<uint32_t>(loaderInfo.indexPos);
 				uint32_t indexCount = 0;
 				uint32_t vertexCount = 0;
 				glm::vec3 posMin{};
@@ -732,6 +732,7 @@ namespace vkglTF
 	VkSamplerAddressMode Model::getVkWrapMode(int32_t wrapMode)
 	{
 		switch (wrapMode) {
+		case -1:
 		case 10497:
 			return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		case 33071:
@@ -739,11 +740,15 @@ namespace vkglTF
 		case 33648:
 			return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 		}
+
+		std::cerr << "Unknown wrap mode for getVkWrapMode: " << wrapMode << std::endl;
+		return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	}
 
 	VkFilter Model::getVkFilterMode(int32_t filterMode)
 	{
 		switch (filterMode) {
+		case -1:
 		case 9728:
 			return VK_FILTER_NEAREST;
 		case 9729:
@@ -757,6 +762,9 @@ namespace vkglTF
 		case 9987:
 			return VK_FILTER_LINEAR;
 		}
+
+		std::cerr << "Unknown filter mode for getVkFilterMode: " << filterMode << std::endl;
+		return VK_FILTER_NEAREST;
 	}
 
 	void Model::loadTextureSamplers(tinygltf::Model &gltfModel)
@@ -1039,7 +1047,6 @@ namespace vkglTF
 
 		size_t vertexBufferSize = vertexCount * sizeof(Vertex);
 		size_t indexBufferSize = indexCount * sizeof(uint32_t);
-		indices.count = indexCount;
 
 		assert(vertexBufferSize > 0);
 

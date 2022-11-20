@@ -53,7 +53,6 @@ public:
 		ImGuiIO& io = ImGui::GetIO();
 		unsigned char* fontData;
 		int texWidth, texHeight;
-		ImFont *font;
 
 #if defined(__ANDROID__)
 		float scale = (float)vks::android::screenDensity / (float)ACONFIGURATION_DENSITY_MEDIUM;
