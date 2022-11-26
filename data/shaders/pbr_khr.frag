@@ -35,13 +35,17 @@ layout (set = 0, binding = 4) uniform sampler2D samplerBRDFLUT;
 
 // Material bindings
 
+// Textures
+
 layout (set = 1, binding = 0) uniform sampler2D colorMap;
 layout (set = 1, binding = 1) uniform sampler2D physicalDescriptorMap;
 layout (set = 1, binding = 2) uniform sampler2D normalMap;
 layout (set = 1, binding = 3) uniform sampler2D aoMap;
 layout (set = 1, binding = 4) uniform sampler2D emissiveMap;
 
-layout (push_constant) uniform Material {
+// Properties
+
+struct ShaderMaterial {
 	vec4 baseColorFactor;
 	vec4 emissiveFactor;
 	vec4 diffuseFactor;
@@ -56,7 +60,16 @@ layout (push_constant) uniform Material {
 	float roughnessFactor;	
 	float alphaMask;	
 	float alphaMaskCutoff;
-} material;
+};
+
+layout(std430, set = 3, binding = 0) buffer SSBO
+{
+   ShaderMaterial materials[ ];
+};
+
+layout (push_constant) uniform PushConstants {
+	int materialIndex;
+} pushConstants;
 
 layout (location = 0) out vec4 outColor;
 
@@ -123,7 +136,7 @@ vec4 SRGBtoLINEAR(vec4 srgbIn)
 
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
-vec3 getNormal()
+vec3 getNormal(ShaderMaterial material)
 {
 	// Perturb normal, see http://www.thetenthplanet.de/archives/1180
 	vec3 tangentNormal = texture(normalMap, material.normalTextureSet == 0 ? inUV0 : inUV1).xyz * 2.0 - 1.0;
@@ -207,7 +220,7 @@ float microfacetDistribution(PBRInfo pbrInputs)
 // Gets metallic factor from specular glossiness workflow inputs 
 float convertMetallic(vec3 diffuse, vec3 specular, float maxSpecular) {
 	float perceivedDiffuse = sqrt(0.299 * diffuse.r * diffuse.r + 0.587 * diffuse.g * diffuse.g + 0.114 * diffuse.b * diffuse.b);
-	float perceivedSpecular = sqrt(0.299 * specular.r * specular.r + 0.587 * specular.g * specular.g + 0.114 * specular.b * specular.b);
+	float perceivedSpecular = sqrt(0.299 * speculkaar.r * specular.r + 0.587 * specular.g * specular.g + 0.114 * specular.b * specular.b);
 	if (perceivedSpecular < c_MinRoughness) {
 		return 0.0;
 	}
@@ -220,6 +233,8 @@ float convertMetallic(vec3 diffuse, vec3 specular, float maxSpecular) {
 
 void main()
 {
+	ShaderMaterial material = materials[pushConstants.materialIndex];
+
 	float perceptualRoughness;
 	float metallic;
 	vec3 diffuseColor;
@@ -307,7 +322,7 @@ void main()
 	vec3 specularEnvironmentR0 = specularColor.rgb;
 	vec3 specularEnvironmentR90 = vec3(1.0, 1.0, 1.0) * reflectance90;
 
-	vec3 n = (material.normalTextureSet > -1) ? getNormal() : normalize(inNormal);
+	vec3 n = (material.normalTextureSet > -1) ? getNormal(material) : normalize(inNormal);
 	vec3 v = normalize(ubo.camPos - inWorldPos);    // Vector from surface point to camera
 	vec3 l = normalize(uboParams.lightDir.xyz);     // Vector from surface point to light
 	vec3 h = normalize(l+v);                        // Half vector between both l and v

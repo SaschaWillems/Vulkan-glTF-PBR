@@ -114,6 +114,7 @@ namespace vkglTF
 			bool specularGlossiness = false;
 		} pbrWorkflows;
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		int index = 0;
 	};
 
 	struct Primitive {

@@ -86,6 +86,7 @@ public:
 		VkDescriptorSetLayout scene;
 		VkDescriptorSetLayout material;
 		VkDescriptorSetLayout node;
+		VkDescriptorSetLayout materialBuffer;
 	} descriptorSetLayouts;
 
 	struct DescriptorSets {
@@ -93,7 +94,7 @@ public:
 		VkDescriptorSet skybox;
 	};
 	std::vector<DescriptorSets> descriptorSets;
-
+	
 	std::vector<VkCommandBuffer> commandBuffers;
 	std::vector<UniformBufferSet> uniformBuffers;
 
@@ -129,7 +130,7 @@ public:
 
 	enum PBRWorkflows{ PBR_WORKFLOW_METALLIC_ROUGHNESS = 0, PBR_WORKFLOW_SPECULAR_GLOSINESS = 1 };
 
-	struct PushConstBlockMaterial {
+	struct alignas(16) ShaderMaterial {
 		glm::vec4 baseColorFactor;
 		glm::vec4 emissiveFactor;
 		glm::vec4 diffuseFactor;
@@ -144,7 +145,9 @@ public:
 		float roughnessFactor;
 		float alphaMask;
 		float alphaMaskCutoff;
-	} pushConstBlockMaterial;
+	};
+	Buffer shaderMaterialBuffer;
+	VkDescriptorSet descriptorSetMaterials;
 
 	std::map<std::string, std::string> environments;
 	std::string selectedEnvironment = "papermill";
@@ -229,43 +232,12 @@ public:
 						descriptorSets[cbIndex].scene,
 						primitive->material.descriptorSet,
 						node->mesh->uniformBuffer.descriptorSet,
+						descriptorSetMaterials
 					};
 					vkCmdBindDescriptorSets(commandBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
 
-					// Pass material parameters as push constants
-					PushConstBlockMaterial pushConstBlockMaterial{};					
-					pushConstBlockMaterial.emissiveFactor = primitive->material.emissiveFactor;
-					// To save push constant space, availabilty and texture coordiante set are combined
-					// -1 = texture not used for this material, >= 0 texture used and index of texture coordinate set
-					pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
-					pushConstBlockMaterial.normalTextureSet = primitive->material.normalTexture != nullptr ? primitive->material.texCoordSets.normal : -1;
-					pushConstBlockMaterial.occlusionTextureSet = primitive->material.occlusionTexture != nullptr ? primitive->material.texCoordSets.occlusion : -1;
-					pushConstBlockMaterial.emissiveTextureSet = primitive->material.emissiveTexture != nullptr ? primitive->material.texCoordSets.emissive : -1;
-					pushConstBlockMaterial.alphaMask = static_cast<float>(primitive->material.alphaMode == vkglTF::Material::ALPHAMODE_MASK);
-					pushConstBlockMaterial.alphaMaskCutoff = primitive->material.alphaCutoff;
-
-					// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
-
-					if (primitive->material.pbrWorkflows.metallicRoughness) {
-						// Metallic roughness workflow
-						pushConstBlockMaterial.workflow = static_cast<float>(PBR_WORKFLOW_METALLIC_ROUGHNESS);
-						pushConstBlockMaterial.baseColorFactor = primitive->material.baseColorFactor;
-						pushConstBlockMaterial.metallicFactor = primitive->material.metallicFactor;
-						pushConstBlockMaterial.roughnessFactor = primitive->material.roughnessFactor;
-						pushConstBlockMaterial.PhysicalDescriptorTextureSet = primitive->material.metallicRoughnessTexture != nullptr ? primitive->material.texCoordSets.metallicRoughness : -1;
-						pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
-					}
-
-					if (primitive->material.pbrWorkflows.specularGlossiness) {
-						// Specular glossiness workflow
-						pushConstBlockMaterial.workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSINESS);
-						pushConstBlockMaterial.PhysicalDescriptorTextureSet = primitive->material.extension.specularGlossinessTexture != nullptr ? primitive->material.texCoordSets.specularGlossiness : -1;
-						pushConstBlockMaterial.colorTextureSet = primitive->material.extension.diffuseTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
-						pushConstBlockMaterial.diffuseFactor = primitive->material.extension.diffuseFactor;
-						pushConstBlockMaterial.specularFactor = glm::vec4(primitive->material.extension.specularFactor, 1.0f);
-					}
-
-					vkCmdPushConstants(commandBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
+					// Pass material index for this primitive using a push constant, the shader uses this to index into the material buffer
+					vkCmdPushConstants(commandBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint32_t), &primitive->material.index);
 
 					if (primitive->hasIndices) {
 						vkCmdDrawIndexed(commandBuffers[cbIndex], primitive->indexCount, 1, primitive->firstIndex, 0, 0);
@@ -365,6 +337,73 @@ public:
 		}
 	}
 
+	// We place all materials for the current scene into a shader storage buffer stored on the GPU
+	// This allows use to use arbitrary large material defintions
+	// The fragment shader then get's the index into this material array from a push constant set per primitive
+	void createMaterialBuffer()
+	{
+		std::vector<ShaderMaterial> shaderMaterials{};
+		for (auto& material : models.scene.materials) {
+			ShaderMaterial shaderMaterial{};
+
+			shaderMaterial.emissiveFactor = material.emissiveFactor;
+			// To save space, availabilty and texture coordinate set are combined
+			// -1 = texture not used for this material, >= 0 texture used and index of texture coordinate set
+			shaderMaterial.colorTextureSet = material.baseColorTexture != nullptr ? material.texCoordSets.baseColor : -1;
+			shaderMaterial.normalTextureSet = material.normalTexture != nullptr ? material.texCoordSets.normal : -1;
+			shaderMaterial.occlusionTextureSet = material.occlusionTexture != nullptr ? material.texCoordSets.occlusion : -1;
+			shaderMaterial.emissiveTextureSet = material.emissiveTexture != nullptr ? material.texCoordSets.emissive : -1;
+			shaderMaterial.alphaMask = static_cast<float>(material.alphaMode == vkglTF::Material::ALPHAMODE_MASK);
+			shaderMaterial.alphaMaskCutoff = material.alphaCutoff;
+
+			// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
+
+			if (material.pbrWorkflows.metallicRoughness) {
+				// Metallic roughness workflow
+				shaderMaterial.workflow = static_cast<float>(PBR_WORKFLOW_METALLIC_ROUGHNESS);
+				shaderMaterial.baseColorFactor = material.baseColorFactor;
+				shaderMaterial.metallicFactor = material.metallicFactor;
+				shaderMaterial.roughnessFactor = material.roughnessFactor;
+				shaderMaterial.PhysicalDescriptorTextureSet = material.metallicRoughnessTexture != nullptr ? material.texCoordSets.metallicRoughness : -1;
+				shaderMaterial.colorTextureSet = material.baseColorTexture != nullptr ? material.texCoordSets.baseColor : -1;
+			}
+
+			if (material.pbrWorkflows.specularGlossiness) {
+				// Specular glossiness workflow
+				shaderMaterial.workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSINESS);
+				shaderMaterial.PhysicalDescriptorTextureSet = material.extension.specularGlossinessTexture != nullptr ? material.texCoordSets.specularGlossiness : -1;
+				shaderMaterial.colorTextureSet = material.extension.diffuseTexture != nullptr ? material.texCoordSets.baseColor : -1;
+				shaderMaterial.diffuseFactor = material.extension.diffuseFactor;
+				shaderMaterial.specularFactor = glm::vec4(material.extension.specularFactor, 1.0f);
+			}
+
+			shaderMaterials.push_back(shaderMaterial);
+		}
+
+		if (shaderMaterialBuffer.buffer != VK_NULL_HANDLE) {
+			shaderMaterialBuffer.destroy();
+		}
+		VkDeviceSize bufferSize = shaderMaterials.size() * sizeof(ShaderMaterial);
+		Buffer stagingBuffer;
+		VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer.buffer, &stagingBuffer.memory, shaderMaterials.data()));
+		VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bufferSize, &shaderMaterialBuffer.buffer, &shaderMaterialBuffer.memory));
+
+		// Copy from staging buffers
+		VkCommandBuffer copyCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+		VkBufferCopy copyRegion{};
+		copyRegion.size = bufferSize;
+		vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMaterialBuffer.buffer, 1, &copyRegion);
+		vulkanDevice->flushCommandBuffer(copyCmd, queue, true);
+		stagingBuffer.device = device;
+		stagingBuffer.destroy();
+
+		// Update descriptor
+		shaderMaterialBuffer.descriptor.buffer = shaderMaterialBuffer.buffer;
+		shaderMaterialBuffer.descriptor.offset = 0;
+		shaderMaterialBuffer.descriptor.range = bufferSize;
+		shaderMaterialBuffer.device = device;
+	}
+
 	void loadScene(std::string filename)
 	{
 		std::cout << "Loading scene from " << filename << std::endl;
@@ -373,6 +412,7 @@ public:
 		animationTimer = 0.0f;
 		auto tStart = std::chrono::high_resolution_clock::now();
 		models.scene.loadFromFile(filename, vulkanDevice, queue);
+		createMaterialBuffer();
 		auto tFileLoad = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - tStart).count();
 		std::cout << "Loading took " << tFileLoad << " ms" << std::endl;
 		camera.setPosition({ 0.0f, 0.0f, 1.0f });
@@ -488,11 +528,13 @@ public:
 
 		std::vector<VkDescriptorPoolSize> poolSizes = {
 			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, (4 + meshCount) * swapChain.imageCount },
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount * swapChain.imageCount }
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount * swapChain.imageCount },
+			// One SSBO for the shader material buffer
+			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 } 
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		descriptorPoolCI.poolSizeCount = 2;
+		descriptorPoolCI.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 		descriptorPoolCI.pPoolSizes = poolSizes.data();
 		descriptorPoolCI.maxSets = (2 + materialCount + meshCount) * swapChain.imageCount;
 		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool));
@@ -648,6 +690,34 @@ public:
 				}
 			}
 
+			// Material Buffer
+			{
+				std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+					{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				};
+				VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+				descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
+				descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+				VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.materialBuffer));
+
+				VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+				descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				descriptorSetAllocInfo.descriptorPool = descriptorPool;
+				descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.materialBuffer;
+				descriptorSetAllocInfo.descriptorSetCount = 1;
+				VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSetMaterials));
+
+				VkWriteDescriptorSet writeDescriptorSet{};
+				writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				writeDescriptorSet.descriptorCount = 1;
+				writeDescriptorSet.dstSet = descriptorSetMaterials;
+				writeDescriptorSet.dstBinding = 0;
+				writeDescriptorSet.pBufferInfo = &shaderMaterialBuffer.descriptor;
+				vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+			}
+
 		}
 
 		// Skybox (fixed set)
@@ -739,14 +809,14 @@ public:
 
 		// Pipeline layout
 		const std::vector<VkDescriptorSetLayout> setLayouts = {
-			descriptorSetLayouts.scene, descriptorSetLayouts.material, descriptorSetLayouts.node
+			descriptorSetLayouts.scene, descriptorSetLayouts.material, descriptorSetLayouts.node, descriptorSetLayouts.materialBuffer
 		};
 		VkPipelineLayoutCreateInfo pipelineLayoutCI{};
 		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutCI.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
 		pipelineLayoutCI.pSetLayouts = setLayouts.data();
 		VkPushConstantRange pushConstantRange{};
-		pushConstantRange.size = sizeof(PushConstBlockMaterial);
+		pushConstantRange.size = sizeof(uint32_t);
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 		pipelineLayoutCI.pushConstantRangeCount = 1;
 		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;

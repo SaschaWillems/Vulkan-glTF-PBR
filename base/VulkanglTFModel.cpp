@@ -861,6 +861,7 @@ namespace vkglTF
 				}
 			}
 
+			material.index = static_cast<uint32_t>(materials.size());
 			materials.push_back(material);
 		}
 		// Push a default material at the end of the list for meshes with no material assigned
