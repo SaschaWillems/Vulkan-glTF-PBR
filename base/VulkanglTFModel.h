@@ -115,6 +115,7 @@ namespace vkglTF
 		} pbrWorkflows;
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		int index = 0;
+		bool unlit = false;
 	};
 
 	struct Primitive {

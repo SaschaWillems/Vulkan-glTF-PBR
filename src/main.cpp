@@ -16,6 +16,7 @@
 #include <vector>
 #include <chrono>
 #include <map>
+#include <unordered_map>
 #include "algorithm"
 
 #include <vulkan/vulkan.h>
@@ -74,12 +75,7 @@ public:
 
 	VkPipelineLayout pipelineLayout;
 
-	struct Pipelines {
-		VkPipeline skybox;
-		VkPipeline pbr;
-		VkPipeline pbrDoubleSided;
-		VkPipeline pbrAlphaBlend;
-	} pipelines;
+	std::unordered_map<std::string, VkPipeline> pipelines;
 	VkPipeline boundPipeline = VK_NULL_HANDLE;
 
 	struct DescriptorSetLayouts {
@@ -170,9 +166,9 @@ public:
 
 	~VulkanExample()
 	{
-		vkDestroyPipeline(device, pipelines.skybox, nullptr);
-		vkDestroyPipeline(device, pipelines.pbr, nullptr);
-		vkDestroyPipeline(device, pipelines.pbrAlphaBlend, nullptr);
+		for (auto& pipeline : pipelines) {
+			vkDestroyPipeline(device, pipeline.second, nullptr);
+		}
 
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.scene, nullptr);
@@ -211,17 +207,24 @@ public:
 			// Render mesh primitives
 			for (vkglTF::Primitive * primitive : node->mesh->primitives) {
 				if (primitive->material.alphaMode == alphaMode) {
+					std::string pipelineName = "pbr";
+					std::string pipelineVariant = "";
 
-					VkPipeline pipeline = VK_NULL_HANDLE;
-					switch (alphaMode) {
-					case vkglTF::Material::ALPHAMODE_OPAQUE:
-					case vkglTF::Material::ALPHAMODE_MASK:
-						pipeline = primitive->material.doubleSided ? pipelines.pbrDoubleSided : pipelines.pbr;
-						break;
-					case vkglTF::Material::ALPHAMODE_BLEND:
-						pipeline = pipelines.pbrAlphaBlend;
-						break;
+					if (primitive->material.unlit) {
+						// KHR_materials_unlit
+						pipelineName = "unlit";
+					};
+
+					// Material properties define if we e.g. need to bind a pipeline variant with culling disabled (double sided)
+					if (alphaMode == vkglTF::Material::ALPHAMODE_BLEND) {
+						pipelineVariant = "_alpha_blending";
+					} else {
+						if (primitive->material.doubleSided) {
+							pipelineVariant = "_double_sided";
+						}
 					}
+
+					const VkPipeline pipeline = pipelines[pipelineName + pipelineVariant];
 
 					if (pipeline != boundPipeline) {
 						vkCmdBindPipeline(commandBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
@@ -302,7 +305,7 @@ public:
 
 			if (displayBackground) {
 				vkCmdBindDescriptorSets(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i].skybox, 0, nullptr);
-				vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.skybox);
+				vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines["skybox"]);
 				models.skybox.draw(currentCB);
 			}
 
@@ -756,7 +759,8 @@ public:
 		}
 	}
 
-	void preparePipelines()
+	// Depending on material setting, we need different pipeline variants per set, e.g. one with back-face culling, one without and one with alpha-blending enabled. This function generates such a set.
+	void addPipelineSet(const std::string prefix, const std::string vertexShader, const std::string fragmentShader)
 	{
 		VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCI{};
 		inputAssemblyStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -780,8 +784,8 @@ public:
 
 		VkPipelineDepthStencilStateCreateInfo depthStencilStateCI{};
 		depthStencilStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencilStateCI.depthTestEnable = VK_FALSE;
-		depthStencilStateCI.depthWriteEnable = VK_FALSE;
+		depthStencilStateCI.depthTestEnable = (prefix == "skybox" ? VK_FALSE : VK_TRUE);
+		depthStencilStateCI.depthWriteEnable = (prefix == "skybox" ? VK_FALSE : VK_TRUE);
 		depthStencilStateCI.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 		depthStencilStateCI.front = depthStencilStateCI.back;
 		depthStencilStateCI.back.compareOp = VK_COMPARE_OP_ALWAYS;
@@ -858,31 +862,18 @@ public:
 		pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
 		pipelineCI.pStages = shaderStages.data();
 
-		if (settings.multiSampling) {
-			multisampleStateCI.rasterizationSamples = settings.sampleCount;
-		}
+		shaderStages[0] = loadShader(device, vertexShader, VK_SHADER_STAGE_VERTEX_BIT);
+		shaderStages[1] = loadShader(device, fragmentShader, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-		// Skybox pipeline (background cube)
-		shaderStages = {
-			loadShader(device, "skybox.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-			loadShader(device, "skybox.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
-		};
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.skybox));
-		for (auto shaderStage : shaderStages) {
-			vkDestroyShaderModule(device, shaderStage.module, nullptr);
-		}
-
-		// PBR pipeline
-		shaderStages = {
-			loadShader(device, "pbr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-			loadShader(device, "pbr_khr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
-		};
-		depthStencilStateCI.depthWriteEnable = VK_TRUE;
-		depthStencilStateCI.depthTestEnable = VK_TRUE;
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.pbr));
+		VkPipeline pipeline{};
+		// Default pipeline with back-face culling
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipeline));
+		pipelines[prefix] = pipeline;
+		// Double sided
 		rasterizationStateCI.cullMode = VK_CULL_MODE_NONE;
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.pbrDoubleSided));
-
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipeline));
+		pipelines[prefix + "_double_sided"] = pipeline;
+		// Alpha blending
 		rasterizationStateCI.cullMode = VK_CULL_MODE_NONE;
 		blendAttachmentState.blendEnable = VK_TRUE;
 		blendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -892,11 +883,22 @@ public:
 		blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 		blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 		blendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.pbrAlphaBlend));
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipeline));
+		pipelines[prefix + "_alpha_blending"] = pipeline;
 
 		for (auto shaderStage : shaderStages) {
 			vkDestroyShaderModule(device, shaderStage.module, nullptr);
 		}
+	};
+
+	void preparePipelines()
+	{
+		// Skybox pipeline (background cube)
+		addPipelineSet("skybox", "skybox.vert.spv", "skybox.frag.spv");
+		// PBR pipelines
+		addPipelineSet("pbr", "pbr.vert.spv", "material_pbr.frag.spv");
+		// KHR_materials_unlit
+		addPipelineSet("unlit", "pbr.vert.spv", "material_unlit.frag.spv");
 	}
 
 	/*

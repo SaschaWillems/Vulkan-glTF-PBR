@@ -220,7 +220,7 @@ float microfacetDistribution(PBRInfo pbrInputs)
 // Gets metallic factor from specular glossiness workflow inputs 
 float convertMetallic(vec3 diffuse, vec3 specular, float maxSpecular) {
 	float perceivedDiffuse = sqrt(0.299 * diffuse.r * diffuse.r + 0.587 * diffuse.g * diffuse.g + 0.114 * diffuse.b * diffuse.b);
-	float perceivedSpecular = sqrt(0.299 * speculkaar.r * specular.r + 0.587 * specular.g * specular.g + 0.114 * specular.b * specular.b);
+	float perceivedSpecular = sqrt(0.299 * specular.r * specular.r + 0.587 * specular.g * specular.g + 0.114 * specular.b * specular.b);
 	if (perceivedSpecular < c_MinRoughness) {
 		return 0.0;
 	}

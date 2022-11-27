@@ -27,6 +27,11 @@ The following major glTF 2.0 features are currently supported by the [vkglTF::Mo
 
 Note that the model loader does not fully implement all aspects of the glTF 2.0 standard, and as such there is no guarantee that all glTF 2.0 models work properly.
 
+Supported extensions:
+
+* KHR_materials_pbrSpecularGlossiness
+* KHR_materials_unlit
+
 ## Loading different scenes
 
 The repository only includes a basic scene setup with the static "damaged helmet" pbr sample model. The official collection of glTF 2.0 sample models can be found at [here](https://github.com/KhronosGroup/glTF-Sample-Models).

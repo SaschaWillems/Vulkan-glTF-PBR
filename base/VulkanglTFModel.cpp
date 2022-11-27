@@ -861,6 +861,10 @@ namespace vkglTF
 				}
 			}
 
+			if (mat.extensions.find("KHR_materials_unlit") != mat.extensions.end()) {
+				material.unlit = true;
+			}
+
 			material.index = static_cast<uint32_t>(materials.size());
 			materials.push_back(material);
 		}
