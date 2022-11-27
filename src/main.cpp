@@ -141,6 +141,7 @@ public:
 		float roughnessFactor;
 		float alphaMask;
 		float alphaMaskCutoff;
+		float emissiveStrength;
 	};
 	Buffer shaderMaterialBuffer;
 	VkDescriptorSet descriptorSetMaterials;
@@ -358,6 +359,7 @@ public:
 			shaderMaterial.emissiveTextureSet = material.emissiveTexture != nullptr ? material.texCoordSets.emissive : -1;
 			shaderMaterial.alphaMask = static_cast<float>(material.alphaMode == vkglTF::Material::ALPHAMODE_MASK);
 			shaderMaterial.alphaMaskCutoff = material.alphaCutoff;
+			shaderMaterial.emissiveStrength = material.emissiveStrength;
 
 			// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
 

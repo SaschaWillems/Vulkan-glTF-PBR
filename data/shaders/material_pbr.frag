@@ -60,6 +60,7 @@ struct ShaderMaterial {
 	float roughnessFactor;	
 	float alphaMask;	
 	float alphaMaskCutoff;
+	float emissiveStrength;
 };
 
 layout(std430, set = 3, binding = 0) buffer SSBO
@@ -373,9 +374,9 @@ void main()
 		color = mix(color, color * ao, u_OcclusionStrength);
 	}
 
-	vec3 emissive = material.emissiveFactor.rgb;
+	vec3 emissive = material.emissiveFactor.rgb * material.emissiveStrength;
 	if (material.emissiveTextureSet > -1) {
-		emissive *= SRGBtoLINEAR(texture(emissiveMap, material.emissiveTextureSet == 0 ? inUV0 : inUV1)).rgb ;
+		emissive *= SRGBtoLINEAR(texture(emissiveMap, material.emissiveTextureSet == 0 ? inUV0 : inUV1)).rgb;
 	};
 	color += emissive;
 	

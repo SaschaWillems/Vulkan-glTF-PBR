@@ -865,6 +865,14 @@ namespace vkglTF
 				material.unlit = true;
 			}
 
+			if (mat.extensions.find("KHR_materials_emissive_strength") != mat.extensions.end()) {
+				auto ext = mat.extensions.find("KHR_materials_emissive_strength");
+				if (ext->second.Has("emissiveStrength")) {
+					auto value = ext->second.Get("emissiveStrength");
+					material.emissiveStrength = (float)value.Get<double>();
+				}
+			}
+
 			material.index = static_cast<uint32_t>(materials.size());
 			materials.push_back(material);
 		}

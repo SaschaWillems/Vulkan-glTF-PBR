@@ -116,6 +116,7 @@ namespace vkglTF
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		int index = 0;
 		bool unlit = false;
+		float emissiveStrength = 1.0f;
 	};
 
 	struct Primitive {
