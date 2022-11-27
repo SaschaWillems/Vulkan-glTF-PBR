@@ -3,6 +3,7 @@
 // Supports both metallic roughness and specular glossiness inputs
 
 #version 450
+#extension GL_GOOGLE_include_directive : require
 
 layout (location = 0) in vec3 inWorldPos;
 layout (location = 1) in vec3 inNormal;
@@ -45,23 +46,7 @@ layout (set = 1, binding = 4) uniform sampler2D emissiveMap;
 
 // Properties
 
-struct ShaderMaterial {
-	vec4 baseColorFactor;
-	vec4 emissiveFactor;
-	vec4 diffuseFactor;
-	vec4 specularFactor;
-	float workflow;
-	int baseColorTextureSet;
-	int physicalDescriptorTextureSet;
-	int normalTextureSet;	
-	int occlusionTextureSet;
-	int emissiveTextureSet;
-	float metallicFactor;	
-	float roughnessFactor;	
-	float alphaMask;	
-	float alphaMaskCutoff;
-	float emissiveStrength;
-};
+#include "includes/shadermaterial.glsl"
 
 layout(std430, set = 3, binding = 0) buffer SSBO
 {
@@ -99,7 +84,7 @@ const float c_MinRoughness = 0.04;
 const float PBR_WORKFLOW_METALLIC_ROUGHNESS = 0.0;
 const float PBR_WORKFLOW_SPECULAR_GLOSINESS = 1.0f;
 
-#define MANUAL_SRGB 1
+#include "includes/srgbtolinear.glsl"
 
 vec3 Uncharted2Tonemap(vec3 color)
 {
@@ -118,21 +103,6 @@ vec4 tonemap(vec4 color)
 	vec3 outcol = Uncharted2Tonemap(color.rgb * uboParams.exposure);
 	outcol = outcol * (1.0f / Uncharted2Tonemap(vec3(11.2f)));	
 	return vec4(pow(outcol, vec3(1.0f / uboParams.gamma)), color.a);
-}
-
-vec4 SRGBtoLINEAR(vec4 srgbIn)
-{
-	#ifdef MANUAL_SRGB
-	#ifdef SRGB_FAST_APPROXIMATION
-	vec3 linOut = pow(srgbIn.xyz,vec3(2.2));
-	#else //SRGB_FAST_APPROXIMATION
-	vec3 bLess = step(vec3(0.04045),srgbIn.xyz);
-	vec3 linOut = mix( srgbIn.xyz/vec3(12.92), pow((srgbIn.xyz+vec3(0.055))/vec3(1.055),vec3(2.4)), bLess );
-	#endif //SRGB_FAST_APPROXIMATION
-	return vec4(linOut,srgbIn.w);;
-	#else //MANUAL_SRGB
-	return srgbIn;
-	#endif //MANUAL_SRGB
 }
 
 // Find the normal for this fragment, pulling either from a predefined normal map
