@@ -373,11 +373,11 @@ void main()
 		color = mix(color, color * ao, u_OcclusionStrength);
 	}
 
-	const float u_EmissiveFactor = 1.0f;
+	vec3 emissive = material.emissiveFactor.rgb;
 	if (material.emissiveTextureSet > -1) {
-		vec3 emissive = SRGBtoLINEAR(texture(emissiveMap, material.emissiveTextureSet == 0 ? inUV0 : inUV1)).rgb * u_EmissiveFactor;
-		color += emissive;
-	}
+		emissive *= SRGBtoLINEAR(texture(emissiveMap, material.emissiveTextureSet == 0 ? inUV0 : inUV1)).rgb ;
+	};
+	color += emissive;
 	
 	outColor = vec4(color, baseColor.a);
 
