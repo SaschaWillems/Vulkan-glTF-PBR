@@ -194,9 +194,14 @@ public:
 		VK_CHECK_RESULT(fpGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, surfaceFormats.data()));
 
 		// We ideally want to use an 8-Bit per channel RGBA sRGB format, so we try to find it in the list of available formats aaa
+#ifdef HDR
+		const VkFormat preferredFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+#else
+		const VkFormat preferredFormat = VK_FORMAT_B8G8R8A8_SRGB;
+#endif
 		bool foundPreferredFormat = false;
 		for (auto& surfaceFormat : surfaceFormats) {
-			if (surfaceFormat.format == VK_FORMAT_B8G8R8A8_SRGB) {
+			if (surfaceFormat.format == preferredFormat) {
 				colorFormat = surfaceFormat.format;
 				colorSpace = surfaceFormat.colorSpace;
 				foundPreferredFormat = true;
