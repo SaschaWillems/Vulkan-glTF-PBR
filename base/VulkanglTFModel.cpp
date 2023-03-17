@@ -1156,7 +1156,7 @@ namespace vkglTF
 	}
 
 	void Model::calculateBoundingBox(Node *node, Node *parent) {
-		BoundingBox parentBvh = parent ? parent->bvh : BoundingBox(dimensions.min, dimensions.max);
+		BoundingBox& parentBvh = parent ? parent->bvh : BoundingBox(dimensions.min, dimensions.max);
 
 		if (node->mesh) {
 			if (node->mesh->bb.valid) {
