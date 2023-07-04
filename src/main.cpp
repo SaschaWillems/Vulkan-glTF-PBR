@@ -1,7 +1,7 @@
 /*
  * Vulkan physical based rendering glTF 2.0 renderer
  *
- * Copyright (C) 2018-2022 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2023 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -126,6 +126,7 @@ public:
 
 	enum PBRWorkflows{ PBR_WORKFLOW_METALLIC_ROUGHNESS = 0, PBR_WORKFLOW_SPECULAR_GLOSINESS = 1 };
 
+	// We use a material buffer to pass material data ind image indices to the shader
 	struct alignas(16) ShaderMaterial {
 		glm::vec4 baseColorFactor;
 		glm::vec4 emissiveFactor;
