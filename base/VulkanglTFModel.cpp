@@ -861,6 +861,19 @@ namespace vkglTF
 				}
 			}
 
+			if (mat.extensions.find("KHR_materials_unlit") != mat.extensions.end()) {
+				material.unlit = true;
+			}
+
+			if (mat.extensions.find("KHR_materials_emissive_strength") != mat.extensions.end()) {
+				auto ext = mat.extensions.find("KHR_materials_emissive_strength");
+				if (ext->second.Has("emissiveStrength")) {
+					auto value = ext->second.Get("emissiveStrength");
+					material.emissiveStrength = (float)value.Get<double>();
+				}
+			}
+
+			material.index = static_cast<uint32_t>(materials.size());
 			materials.push_back(material);
 		}
 		// Push a default material at the end of the list for meshes with no material assigned
@@ -1143,7 +1156,7 @@ namespace vkglTF
 	}
 
 	void Model::calculateBoundingBox(Node *node, Node *parent) {
-		BoundingBox parentBvh = parent ? parent->bvh : BoundingBox(dimensions.min, dimensions.max);
+		BoundingBox& parentBvh = parent ? parent->bvh : BoundingBox(dimensions.min, dimensions.max);
 
 		if (node->mesh) {
 			if (node->mesh->bb.valid) {

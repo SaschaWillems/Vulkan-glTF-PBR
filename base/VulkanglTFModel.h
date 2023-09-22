@@ -88,7 +88,7 @@ namespace vkglTF
 		float metallicFactor = 1.0f;
 		float roughnessFactor = 1.0f;
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
-		glm::vec4 emissiveFactor = glm::vec4(1.0f);
+		glm::vec4 emissiveFactor = glm::vec4(0.0f);
 		vkglTF::Texture *baseColorTexture;
 		vkglTF::Texture *metallicRoughnessTexture;
 		vkglTF::Texture *normalTexture;
@@ -114,6 +114,9 @@ namespace vkglTF
 			bool specularGlossiness = false;
 		} pbrWorkflows;
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		int index = 0;
+		bool unlit = false;
+		float emissiveStrength = 1.0f;
 	};
 
 	struct Primitive {
