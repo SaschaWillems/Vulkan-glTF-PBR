@@ -1828,7 +1828,6 @@ public:
 
 		loadAssets();
 		generateBRDFLUT();
-		generateCubemaps();
 		prepareUniformBuffers();
 		setupDescriptors();
 		preparePipelines();
