@@ -1,3 +1,9 @@
+/* Copyright (c) 2018-2023, Sascha Willems
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ */
+
 struct ShaderMaterial {
 	vec4 baseColorFactor;
 	vec4 emissiveFactor;
