@@ -1857,7 +1857,6 @@ public:
 		ui->pushConstBlock.translate = glm::vec2(-1.0f);
 
 		bool updateShaderParams = false;
-		bool updateCBs = false;
 		float scale = 1.0f;
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
@@ -1879,7 +1878,6 @@ public:
 				vkDeviceWaitIdle(device);
 				loadScene(scenes[selectedScene]);
 				setupDescriptors();
-				updateCBs = true;
 			}
 #else
 			if (ui->button("Open gltf file")) {
@@ -1913,7 +1911,6 @@ public:
 					vkDeviceWaitIdle(device);
 					loadScene(filename);
 					setupDescriptors();
-					updateCBs = true;
 				}
 			}
 #endif
@@ -1921,7 +1918,6 @@ public:
 				vkDeviceWaitIdle(device);
 				loadEnvironment(environments[selectedEnvironment]);
 				setupDescriptors();
-				updateCBs = true;
 			}
 		}
 
@@ -2009,17 +2005,6 @@ public:
 			ui->vertexBuffer.flush();
 			ui->indexBuffer.flush();
 
-			updateCBs = updateCBs || updateBuffers;
-		}
-
-		if (lastDisplaySize.x != io.DisplaySize.x || lastDisplaySize.y != io.DisplaySize.y) {
-			updateCBs = true;
-		}
-
-		if (updateCBs) {
-			//vkDeviceWaitIdle(device);
-			//recordCommandBuffers();
-			//vkDeviceWaitIdle(device);
 		}
 
 		if (updateShaderParams) {
