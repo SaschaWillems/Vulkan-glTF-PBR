@@ -1,7 +1,7 @@
 /*
  * Vulkan physical based rendering glTF 2.0 renderer
  *
- * Copyright (C) 2018-2023 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2024 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -99,7 +99,7 @@ public:
 	std::vector<VkSemaphore> presentCompleteSemaphores;
 
 	const uint32_t renderAhead = 2;
-	uint32_t frameIndex = 0;
+	uint32_t currentFrame = 0;
 
 	int32_t animationIndex = 0;
 	float animationTimer = 0.0f;
@@ -258,8 +258,10 @@ public:
 		}
 	}
 
-	void recordCommandBuffers()
+	void recordCommandBuffer()
 	{
+		vkResetCommandBuffer(commandBuffers[currentFrame], 0);
+
 		VkCommandBufferBeginInfo cmdBufferBeginInfo{};
 		cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -283,63 +285,60 @@ public:
 		renderPassBeginInfo.renderArea.extent.height = height;
 		renderPassBeginInfo.clearValueCount = settings.multiSampling ? 3 : 2;
 		renderPassBeginInfo.pClearValues = clearValues;
+		renderPassBeginInfo.framebuffer = frameBuffers[imageIndex];
 
-		for (uint32_t i = 0; i < commandBuffers.size(); ++i) {
-			renderPassBeginInfo.framebuffer = frameBuffers[i];
+		VkCommandBuffer currentCB = commandBuffers[currentFrame];
 
-			VkCommandBuffer currentCB = commandBuffers[i];
+		VK_CHECK_RESULT(vkBeginCommandBuffer(currentCB, &cmdBufferBeginInfo));
+		vkCmdBeginRenderPass(currentCB, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-			VK_CHECK_RESULT(vkBeginCommandBuffer(currentCB, &cmdBufferBeginInfo));
-			vkCmdBeginRenderPass(currentCB, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+		VkViewport viewport{};
+		viewport.width = (float)width;
+		viewport.height = (float)height;
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(currentCB, 0, 1, &viewport);
 
-			VkViewport viewport{};
-			viewport.width = (float)width;
-			viewport.height = (float)height;
-			viewport.minDepth = 0.0f;
-			viewport.maxDepth = 1.0f;
-			vkCmdSetViewport(currentCB, 0, 1, &viewport);
+		VkRect2D scissor{};
+		scissor.extent = { width, height };
+		vkCmdSetScissor(currentCB, 0, 1, &scissor);
 
-			VkRect2D scissor{};
-			scissor.extent = { width, height };
-			vkCmdSetScissor(currentCB, 0, 1, &scissor);
+		VkDeviceSize offsets[1] = { 0 };
 
-			VkDeviceSize offsets[1] = { 0 };
-
-			if (displayBackground) {
-				vkCmdBindDescriptorSets(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i].skybox, 0, nullptr);
-				vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines["skybox"]);
-				models.skybox.draw(currentCB);
-			}
-
-			vkglTF::Model &model = models.scene;
-
-			vkCmdBindVertexBuffers(currentCB, 0, 1, &model.vertices.buffer, offsets);
-			if (model.indices.buffer != VK_NULL_HANDLE) {
-				vkCmdBindIndexBuffer(currentCB, model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-			}
-
-			boundPipeline = VK_NULL_HANDLE;
-
-			// Opaque primitives first
-			for (auto node : model.nodes) {
-				renderNode(node, i, vkglTF::Material::ALPHAMODE_OPAQUE);
-			}
-			// Alpha masked primitives
-			for (auto node : model.nodes) {
-				renderNode(node, i, vkglTF::Material::ALPHAMODE_MASK);
-			}
-			// Transparent primitives
-			// TODO: Correct depth sorting
-			for (auto node : model.nodes) {
-				renderNode(node, i, vkglTF::Material::ALPHAMODE_BLEND);
-			}
-
-			// User interface
-			ui->draw(currentCB);
-
-			vkCmdEndRenderPass(currentCB);
-			VK_CHECK_RESULT(vkEndCommandBuffer(currentCB));
+		if (displayBackground) {
+			vkCmdBindDescriptorSets(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame].skybox, 0, nullptr);
+			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines["skybox"]);
+			models.skybox.draw(currentCB);
 		}
+
+		vkglTF::Model &model = models.scene;
+
+		vkCmdBindVertexBuffers(currentCB, 0, 1, &model.vertices.buffer, offsets);
+		if (model.indices.buffer != VK_NULL_HANDLE) {
+			vkCmdBindIndexBuffer(currentCB, model.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+		}
+
+		boundPipeline = VK_NULL_HANDLE;
+
+		// Opaque primitives first
+		for (auto node : model.nodes) {
+			renderNode(node, currentFrame, vkglTF::Material::ALPHAMODE_OPAQUE);
+		}
+		// Alpha masked primitives
+		for (auto node : model.nodes) {
+			renderNode(node, currentFrame, vkglTF::Material::ALPHAMODE_MASK);
+		}
+		// Transparent primitives
+		// TODO: Correct depth sorting
+		for (auto node : model.nodes) {
+			renderNode(node, currentFrame, vkglTF::Material::ALPHAMODE_BLEND);
+		}
+
+		// User interface
+		ui->draw(currentCB);
+
+		vkCmdEndRenderPass(currentCB);
+		VK_CHECK_RESULT(vkEndCommandBuffer(currentCB));
 	}
 
 	// We place all materials for the current scene into a shader storage buffer stored on the GPU
@@ -443,7 +442,6 @@ public:
 		tinygltf::asset_manager = androidApp->activity->assetManager;
 		readDirectory(assetpath + "models", "*.gltf", scenes, true);
 #else
-		const std::string assetpath = "./../data/";
 		struct stat info;
 		if (stat(assetpath.c_str(), &info) != 0) {
 			std::string msg = "Could not locate asset path in \"" + assetpath + "\".\nMake sure binary is run from correct relative directory!";
@@ -1778,7 +1776,6 @@ public:
 
 	void windowResized()
 	{
-		recordCommandBuffers();
 		vkDeviceWaitIdle(device);
 		updateUniformBuffers();
 		updateOverlay();
@@ -1835,8 +1832,6 @@ public:
 		ui = new UI(vulkanDevice, renderPass, queue, pipelineCache, settings.sampleCount);
 		updateOverlay();
 
-		recordCommandBuffers();
-
 		prepared = true;
 	}
 
@@ -1859,7 +1854,6 @@ public:
 		ui->pushConstBlock.translate = glm::vec2(-1.0f);
 
 		bool updateShaderParams = false;
-		bool updateCBs = false;
 		float scale = 1.0f;
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
@@ -1881,7 +1875,6 @@ public:
 				vkDeviceWaitIdle(device);
 				loadScene(scenes[selectedScene]);
 				setupDescriptors();
-				updateCBs = true;
 			}
 #else
 			if (ui->button("Open gltf file")) {
@@ -1915,7 +1908,6 @@ public:
 					vkDeviceWaitIdle(device);
 					loadScene(filename);
 					setupDescriptors();
-					updateCBs = true;
 				}
 			}
 #endif
@@ -1923,7 +1915,6 @@ public:
 				vkDeviceWaitIdle(device);
 				loadEnvironment(environments[selectedEnvironment]);
 				setupDescriptors();
-				updateCBs = true;
 			}
 		}
 
@@ -2011,17 +2002,6 @@ public:
 			ui->vertexBuffer.flush();
 			ui->indexBuffer.flush();
 
-			updateCBs = updateCBs || updateBuffers;
-		}
-
-		if (lastDisplaySize.x != io.DisplaySize.x || lastDisplaySize.y != io.DisplaySize.y) {
-			updateCBs = true;
-		}
-
-		if (updateCBs) {
-			vkDeviceWaitIdle(device);
-			recordCommandBuffers();
-			vkDeviceWaitIdle(device);
 		}
 
 		if (updateShaderParams) {
@@ -2043,20 +2023,22 @@ public:
 
 		updateOverlay();
 
-		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[frameIndex], VK_TRUE, UINT64_MAX));
-		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[frameIndex]));
+		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX));
+		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));
 
-		VkResult acquire = swapChain.acquireNextImage(presentCompleteSemaphores[frameIndex], &currentBuffer);
+		VkResult acquire = swapChain.acquireNextImage(presentCompleteSemaphores[currentFrame], &imageIndex);
 		if ((acquire == VK_ERROR_OUT_OF_DATE_KHR) || (acquire == VK_SUBOPTIMAL_KHR)) {
 			windowResize();
 		}
 		else {
 			VK_CHECK_RESULT(acquire);
 		}
+		
+		recordCommandBuffer();
 
 		// Update UBOs
 		updateUniformBuffers();
-		UniformBufferSet currentUB = uniformBuffers[currentBuffer];
+		UniformBufferSet currentUB = uniformBuffers[currentFrame];
 		memcpy(currentUB.scene.mapped, &shaderValuesScene, sizeof(shaderValuesScene));
 		memcpy(currentUB.params.mapped, &shaderValuesParams, sizeof(shaderValuesParams));
 		memcpy(currentUB.skybox.mapped, &shaderValuesSkybox, sizeof(shaderValuesSkybox));
@@ -2065,15 +2047,15 @@ public:
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.pWaitDstStageMask = &waitDstStageMask;
-		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[frameIndex];
+		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[currentFrame];
 		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[frameIndex];
+		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentFrame];
 		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffers[currentBuffer];
+		submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
 		submitInfo.commandBufferCount = 1;
-		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[frameIndex]));
+		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentFrame]));
 
-		VkResult present = swapChain.queuePresent(queue, currentBuffer, renderCompleteSemaphores[frameIndex]);
+		VkResult present = swapChain.queuePresent(queue, imageIndex, renderCompleteSemaphores[currentFrame]);
 		if (!((present == VK_SUCCESS) || (present == VK_SUBOPTIMAL_KHR))) {
 			if (present == VK_ERROR_OUT_OF_DATE_KHR) {
 				windowResize();
@@ -2084,8 +2066,8 @@ public:
 			}
 		}
 
-		frameIndex += 1;
-		frameIndex %= renderAhead;
+		currentFrame += 1;
+		currentFrame %= renderAhead;
 
 		if (!paused) {
 			if (rotateModel) {
@@ -2116,7 +2098,6 @@ public:
 		vkDeviceWaitIdle(device);
 		loadScene(filename);
 		setupDescriptors();
-		recordCommandBuffers();
 	}
 
 };
