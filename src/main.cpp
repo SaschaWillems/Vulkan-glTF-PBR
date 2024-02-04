@@ -1776,7 +1776,6 @@ public:
 
 	void windowResized()
 	{
-		//recordCommandBuffers();
 		vkDeviceWaitIdle(device);
 		updateUniformBuffers();
 		updateOverlay();
@@ -1832,8 +1831,6 @@ public:
 
 		ui = new UI(vulkanDevice, renderPass, queue, pipelineCache, settings.sampleCount);
 		updateOverlay();
-
-		//recordCommandBuffers();
 
 		prepared = true;
 	}
@@ -2101,7 +2098,6 @@ public:
 		vkDeviceWaitIdle(device);
 		loadScene(filename);
 		setupDescriptors();
-		//recordCommandBuffers();
 	}
 
 };
