@@ -1,7 +1,7 @@
 /*
  * Vulkan physical based rendering glTF 2.0 renderer
  *
- * Copyright (C) 2018-2023 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2024 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -442,7 +442,6 @@ public:
 		tinygltf::asset_manager = androidApp->activity->assetManager;
 		readDirectory(assetpath + "models", "*.gltf", scenes, true);
 #else
-		const std::string assetpath = "data/";
 		struct stat info;
 		if (stat(assetpath.c_str(), &info) != 0) {
 			std::string msg = "Could not locate asset path in \"" + assetpath + "\".\nMake sure binary is run from correct relative directory!";

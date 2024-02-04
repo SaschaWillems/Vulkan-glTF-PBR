@@ -93,7 +93,7 @@ protected:
 	VkCommandPool cmdPool;
 	VkRenderPass renderPass;
 	std::vector<VkFramebuffer>frameBuffers;
-	uint32_t currentBuffer = 0;
+	uint32_t imageIndex = 0;
 	VkDescriptorPool descriptorPool;
 	VkPipelineCache pipelineCache;
 	VulkanSwapChain swapChain;
