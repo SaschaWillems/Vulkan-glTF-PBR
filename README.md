@@ -10,9 +10,9 @@ Physically-Based Rendering example implementation with image based lighting in V
 
 ## glTF 2.0 Model loading
 
-Model loading is implemented in the [vkglTF::Model](./base/VulkanglTFModel.hpp) class, using [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files, so e.g. all file formats supported by tinyglTF are suported. This class converts the glTF structures into Vulkan compatible structures used for setup and rendering.
+Model loading is implemented in the [vkglTF::Model](./base/VulkanglTFModel.h) class, using [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files, so e.g. all file formats supported by tinyglTF are suported. This class converts the glTF structures into Vulkan compatible structures used for setup and rendering.
 
-The following major glTF 2.0 features are currently supported by the [vkglTF::Model](./base/VulkanglTFModel.hpp) class:
+The following major glTF 2.0 features are currently supported by the [vkglTF::Model](./base/VulkanglTFModel.h) class:
 
 * [x] Loading arbitrary glTF 2.0 models
     * [x] Full node hierarchy
