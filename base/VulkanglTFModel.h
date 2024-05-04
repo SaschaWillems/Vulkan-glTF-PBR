@@ -1,7 +1,7 @@
 /**
  * Vulkan glTF model and texture loading class based on tinyglTF (https://github.com/syoyo/tinygltf)
  *
- * Copyright (C) 2018-2022 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2024 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -173,6 +173,9 @@ namespace vkglTF
 		glm::quat rotation{};
 		BoundingBox bvh;
 		BoundingBox aabb;
+		bool useCachedMatrix{ false };
+		glm::mat4 cachedLocalMatrix{ glm::mat4(1.0f) };
+		glm::mat4 cachedMatrix{ glm::mat4(1.0f) };
 		glm::mat4 localMatrix();
 		glm::mat4 getMatrix();
 		void update();

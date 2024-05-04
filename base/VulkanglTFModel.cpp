@@ -1,7 +1,7 @@
 /**
  * Vulkan glTF model and texture loading class based on tinyglTF (https://github.com/syoyo/tinygltf)
  *
- * Copyright (C) 2018-2022 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2024 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -344,20 +344,31 @@ namespace vkglTF
 
 	// Node
 	glm::mat4 Node::localMatrix() {
-		return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+		if (!useCachedMatrix) {
+			cachedLocalMatrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+		};
+		return cachedLocalMatrix;
 	}
 
 	glm::mat4 Node::getMatrix() {
-		glm::mat4 m = localMatrix();
-		vkglTF::Node *p = parent;
-		while (p) {
-			m = p->localMatrix() * m;
-			p = p->parent;
+		// Use a simple caching algorithm to avoid having to recalculate matrices to often while traversing the node hierarchy
+		if (!useCachedMatrix) {
+			glm::mat4 m = localMatrix();
+			vkglTF::Node* p = parent;
+			while (p) {
+				m = p->localMatrix() * m;
+				p = p->parent;
+			}
+			cachedMatrix = m;
+			useCachedMatrix = true;
+			return m;
+		} else {
+			return cachedMatrix;
 		}
-		return m;
 	}
 
 	void Node::update() {
+		useCachedMatrix = false;
 		if (mesh) {
 			glm::mat4 m = getMatrix();
 			if (skin) {
