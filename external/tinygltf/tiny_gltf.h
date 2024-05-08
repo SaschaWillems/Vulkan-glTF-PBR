@@ -149,7 +149,11 @@ namespace tinygltf {
 
 #ifdef __ANDROID__
 #ifdef TINYGLTF_ANDROID_LOAD_FROM_ASSETS
-  AAssetManager* asset_manager = nullptr;
+#ifdef TINYGLTF_IMPLEMENTATION
+    AAssetManager *asset_manager = nullptr;
+#else
+    extern AAssetManager *asset_manager;
+#endif
 #endif
 #endif
 

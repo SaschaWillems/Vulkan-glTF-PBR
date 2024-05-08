@@ -8,6 +8,7 @@
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
         <activity android:name=".VulkanActivity"
             android:screenOrientation="landscape"
+            android:exported="true"
             android:configChanges="orientation|keyboardHidden">
             <meta-data android:name="android.app.lib_name"
                 android:value="native-lib" />
