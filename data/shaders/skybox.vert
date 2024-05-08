@@ -1,3 +1,9 @@
+/* Copyright (c) 2018-2023, Sascha Willems
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ */
+
 #version 450
 
 #extension GL_ARB_separate_shader_objects : enable
@@ -14,11 +20,6 @@ layout (binding = 0) uniform UBO
 } ubo;
 
 layout (location = 0) out vec3 outUVW;
-
-out gl_PerVertex 
-{
-	vec4 gl_Position;
-};
 
 void main() 
 {

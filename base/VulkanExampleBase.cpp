@@ -1,7 +1,7 @@
 /*
 * Vulkan Example base class, stripped down version
 *
-* Copyright (C) 2016-2018 by Sascha Willems - www.saschawillems.de
+* Copyright (C) 2016-2024 by Sascha Willems - www.saschawillems.de
 *
 * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
 */
@@ -65,10 +65,20 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 	instanceExtensions.push_back(VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
 #endif
 
+#if defined(VK_USE_PLATFORM_MACOS_MVK) && (VK_HEADER_VERSION >= 216)
+    instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+#endif
+
 	VkInstanceCreateInfo instanceCreateInfo = {};
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	instanceCreateInfo.pNext = NULL;
 	instanceCreateInfo.pApplicationInfo = &appInfo;
+
+#if defined(VK_USE_PLATFORM_MACOS_MVK) && (VK_HEADER_VERSION >= 216)
+    instanceCreateInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
+
 	if (instanceExtensions.size() > 0)
 	{
 		if (settings.validation) {
@@ -79,23 +89,8 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 	}
 	std::vector<const char *> validationLayerNames;
 	if (settings.validation) {
-#if !defined(__ANDROID__) && !defined(VK_USE_PLATFORM_MACOS_MVK)
-		validationLayerNames.push_back("VK_LAYER_LUNARG_standard_validation");
-#else
-		// Use `VK_LAYER_KHRONOS_valiation` for NDK r21 or later 
-		// https://developer.android.com/ndk/guides/graphics/validation-layer
-#if 1 && !defined(VK_USE_PLATFORM_MACOS_MVK)
-		validationLayerNames.push_back("VK_LAYER_GOOGLE_threading");
-		validationLayerNames.push_back("VK_LAYER_LUNARG_parameter_validation");
-		validationLayerNames.push_back("VK_LAYER_LUNARG_object_tracker");
-		validationLayerNames.push_back("VK_LAYER_LUNARG_core_validation");
-		validationLayerNames.push_back("VK_LAYER_LUNARG_swapchain");
-		validationLayerNames.push_back("VK_LAYER_GOOGLE_unique_objects");
-#else
 		validationLayerNames.push_back("VK_LAYER_KHRONOS_validation");
-#endif
-#endif
-		instanceCreateInfo.enabledLayerCount = validationLayerNames.size();
+		instanceCreateInfo.enabledLayerCount = (uint32_t)validationLayerNames.size();
 		instanceCreateInfo.ppEnabledLayerNames = validationLayerNames.data();
 	}
 	return vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
@@ -301,6 +296,8 @@ void VulkanExampleBase::prepare()
 	*/
 	setupFrameBuffer();
 }
+
+void VulkanExampleBase::fileDropped(std::string filename) { }
 
 void VulkanExampleBase::renderFrame()
 {
@@ -771,7 +768,7 @@ HWND VulkanExampleBase::setupWindow(HINSTANCE hinstance, WNDPROC wndproc)
 
 	AdjustWindowRectEx(&windowRect, dwStyle, FALSE, dwExStyle);
 
-	window = CreateWindowEx(0,
+	window = CreateWindowEx(WS_EX_ACCEPTFILES,
 		name.c_str(),
 		title.c_str(),
 		dwStyle | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
@@ -914,6 +911,23 @@ void VulkanExampleBase::handleMessages(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 	case WM_EXITSIZEMOVE:
 		resizing = false;
 		break;
+	case WM_DROPFILES:
+		{
+			std::string fname;
+			HDROP hDrop = reinterpret_cast<HDROP>(wParam);
+			// extract files here
+			char filename[MAX_PATH];
+			uint32_t count = DragQueryFileA(hDrop, -1, nullptr, 0);
+			for (uint32_t i = 0; i < count; ++i) {
+				if (DragQueryFileA(hDrop, i, filename, MAX_PATH)) {
+					fname = filename;
+				}
+				break;
+			}
+			DragFinish(hDrop);
+			fileDropped(fname);
+			break;
+		}
 	}
 }
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)

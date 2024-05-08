@@ -1,13 +1,21 @@
+/* Copyright (c) 2018-2023, Sascha Willems
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ */
+
 // PBR shader based on the Khronos WebGL PBR implementation
 // See https://github.com/KhronosGroup/glTF-WebGL-PBR
 // Supports both metallic roughness and specular glossiness inputs
 
 #version 450
+#extension GL_GOOGLE_include_directive : require
 
 layout (location = 0) in vec3 inWorldPos;
 layout (location = 1) in vec3 inNormal;
 layout (location = 2) in vec2 inUV0;
 layout (location = 3) in vec2 inUV1;
+layout (location = 4) in vec4 inColor0;
 
 // Scene bindings
 
@@ -34,28 +42,26 @@ layout (set = 0, binding = 4) uniform sampler2D samplerBRDFLUT;
 
 // Material bindings
 
+// Textures
+
 layout (set = 1, binding = 0) uniform sampler2D colorMap;
 layout (set = 1, binding = 1) uniform sampler2D physicalDescriptorMap;
 layout (set = 1, binding = 2) uniform sampler2D normalMap;
 layout (set = 1, binding = 3) uniform sampler2D aoMap;
 layout (set = 1, binding = 4) uniform sampler2D emissiveMap;
 
-layout (push_constant) uniform Material {
-	vec4 baseColorFactor;
-	vec4 emissiveFactor;
-	vec4 diffuseFactor;
-	vec4 specularFactor;
-	float workflow;
-	int baseColorTextureSet;
-	int physicalDescriptorTextureSet;
-	int normalTextureSet;	
-	int occlusionTextureSet;
-	int emissiveTextureSet;
-	float metallicFactor;	
-	float roughnessFactor;	
-	float alphaMask;	
-	float alphaMaskCutoff;
-} material;
+// Properties
+
+#include "includes/shadermaterial.glsl"
+
+layout(std430, set = 3, binding = 0) buffer SSBO
+{
+   ShaderMaterial materials[ ];
+};
+
+layout (push_constant) uniform PushConstants {
+	int materialIndex;
+} pushConstants;
 
 layout (location = 0) out vec4 outColor;
 
@@ -84,7 +90,7 @@ const float c_MinRoughness = 0.04;
 const float PBR_WORKFLOW_METALLIC_ROUGHNESS = 0.0;
 const float PBR_WORKFLOW_SPECULAR_GLOSINESS = 1.0f;
 
-#define MANUAL_SRGB 1
+#include "includes/srgbtolinear.glsl"
 
 vec3 Uncharted2Tonemap(vec3 color)
 {
@@ -105,24 +111,9 @@ vec4 tonemap(vec4 color)
 	return vec4(pow(outcol, vec3(1.0f / uboParams.gamma)), color.a);
 }
 
-vec4 SRGBtoLINEAR(vec4 srgbIn)
-{
-	#ifdef MANUAL_SRGB
-	#ifdef SRGB_FAST_APPROXIMATION
-	vec3 linOut = pow(srgbIn.xyz,vec3(2.2));
-	#else //SRGB_FAST_APPROXIMATION
-	vec3 bLess = step(vec3(0.04045),srgbIn.xyz);
-	vec3 linOut = mix( srgbIn.xyz/vec3(12.92), pow((srgbIn.xyz+vec3(0.055))/vec3(1.055),vec3(2.4)), bLess );
-	#endif //SRGB_FAST_APPROXIMATION
-	return vec4(linOut,srgbIn.w);;
-	#else //MANUAL_SRGB
-	return srgbIn;
-	#endif //MANUAL_SRGB
-}
-
 // Find the normal for this fragment, pulling either from a predefined normal map
 // or from the interpolated mesh normal and tangent attributes.
-vec3 getNormal()
+vec3 getNormal(ShaderMaterial material)
 {
 	// Perturb normal, see http://www.thetenthplanet.de/archives/1180
 	vec3 tangentNormal = texture(normalMap, material.normalTextureSet == 0 ? inUV0 : inUV1).xyz * 2.0 - 1.0;
@@ -219,6 +210,8 @@ float convertMetallic(vec3 diffuse, vec3 specular, float maxSpecular) {
 
 void main()
 {
+	ShaderMaterial material = materials[pushConstants.materialIndex];
+
 	float perceptualRoughness;
 	float metallic;
 	vec3 diffuseColor;
@@ -288,6 +281,8 @@ void main()
 
 	}
 
+	baseColor *= inColor0;
+
 	diffuseColor = baseColor.rgb * (vec3(1.0) - f0);
 	diffuseColor *= 1.0 - metallic;
 		
@@ -304,7 +299,7 @@ void main()
 	vec3 specularEnvironmentR0 = specularColor.rgb;
 	vec3 specularEnvironmentR90 = vec3(1.0, 1.0, 1.0) * reflectance90;
 
-	vec3 n = (material.normalTextureSet > -1) ? getNormal() : normalize(inNormal);
+	vec3 n = (material.normalTextureSet > -1) ? getNormal(material) : normalize(inNormal);
 	vec3 v = normalize(ubo.camPos - inWorldPos);    // Vector from surface point to camera
 	vec3 l = normalize(uboParams.lightDir.xyz);     // Vector from surface point to light
 	vec3 h = normalize(l+v);                        // Half vector between both l and v
@@ -355,11 +350,11 @@ void main()
 		color = mix(color, color * ao, u_OcclusionStrength);
 	}
 
-	const float u_EmissiveFactor = 1.0f;
+	vec3 emissive = material.emissiveFactor.rgb * material.emissiveStrength;
 	if (material.emissiveTextureSet > -1) {
-		vec3 emissive = SRGBtoLINEAR(texture(emissiveMap, material.emissiveTextureSet == 0 ? inUV0 : inUV1)).rgb * u_EmissiveFactor;
-		color += emissive;
-	}
+		emissive *= SRGBtoLINEAR(texture(emissiveMap, material.emissiveTextureSet == 0 ? inUV0 : inUV1)).rgb;
+	};
+	color += emissive;
 	
 	outColor = vec4(color, baseColor.a);
 

@@ -1,7 +1,7 @@
 /**
  * Vulkan glTF model and texture loading class based on tinyglTF (https://github.com/syoyo/tinygltf)
  *
- * Copyright (C) 2018-2021 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2024 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -9,13 +9,11 @@
 //#pragma once
 
 #define TINYGLTF_IMPLEMENTATION
-#define TINYGLTF_NO_STB_IMAGE_WRITE
 #define STB_IMAGE_IMPLEMENTATION
 #if defined(__ANDROID__)
 #define TINYGLTF_ANDROID_LOAD_FROM_ASSETS
 #endif
 #define STBI_MSC_SECURE_CRT
-
 
 #include "VulkanglTFModel.h"
 
@@ -349,20 +347,31 @@ namespace vkglTF
 
 	// Node
 	glm::mat4 Node::localMatrix() {
-		return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+		if (!useCachedMatrix) {
+			cachedLocalMatrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+		};
+		return cachedLocalMatrix;
 	}
 
 	glm::mat4 Node::getMatrix() {
-		glm::mat4 m = localMatrix();
-		vkglTF::Node *p = parent;
-		while (p) {
-			m = p->localMatrix() * m;
-			p = p->parent;
+		// Use a simple caching algorithm to avoid having to recalculate matrices to often while traversing the node hierarchy
+		if (!useCachedMatrix) {
+			glm::mat4 m = localMatrix();
+			vkglTF::Node* p = parent;
+			while (p) {
+				m = p->localMatrix() * m;
+				p = p->parent;
+			}
+			cachedMatrix = m;
+			useCachedMatrix = true;
+			return m;
+		} else {
+			return cachedMatrix;
 		}
-		return m;
 	}
 
 	void Node::update() {
+		useCachedMatrix = false;
 		if (mesh) {
 			glm::mat4 m = getMatrix();
 			if (skin) {
@@ -429,8 +438,8 @@ namespace vkglTF
 		}
 		skins.resize(0);
 	};
-
-	void Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, uint32_t nodeIndex, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
+	
+	void Model::loadNode(vkglTF::Node *parent, const tinygltf::Node &node, uint32_t nodeIndex, const tinygltf::Model &model, LoaderInfo& loaderInfo, float globalscale)
 	{
 		vkglTF::Node *newNode = new Node{};
 		newNode->index = nodeIndex;
@@ -462,7 +471,7 @@ namespace vkglTF
 		// Node with children
 		if (node.children.size() > 0) {
 			for (size_t i = 0; i < node.children.size(); i++) {
-				loadNode(newNode, model.nodes[node.children[i]], node.children[i], model, indexBuffer, vertexBuffer, globalscale);
+				loadNode(newNode, model.nodes[node.children[i]], node.children[i], model, loaderInfo, globalscale);
 			}
 		}
 
@@ -472,8 +481,8 @@ namespace vkglTF
 			Mesh *newMesh = new Mesh(device, newNode->matrix);
 			for (size_t j = 0; j < mesh.primitives.size(); j++) {
 				const tinygltf::Primitive &primitive = mesh.primitives[j];
-				uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
-				uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
+				uint32_t vertexStart = static_cast<uint32_t>(loaderInfo.vertexPos);
+				uint32_t indexStart = static_cast<uint32_t>(loaderInfo.indexPos);
 				uint32_t indexCount = 0;
 				uint32_t vertexCount = 0;
 				glm::vec3 posMin{};
@@ -486,6 +495,7 @@ namespace vkglTF
 					const float *bufferNormals = nullptr;
 					const float *bufferTexCoordSet0 = nullptr;
 					const float *bufferTexCoordSet1 = nullptr;
+					const float* bufferColorSet0 = nullptr;
 					const void *bufferJoints = nullptr;
 					const float *bufferWeights = nullptr;
 
@@ -493,6 +503,7 @@ namespace vkglTF
 					int normByteStride;
 					int uv0ByteStride;
 					int uv1ByteStride;
+					int color0ByteStride;
 					int jointByteStride;
 					int weightByteStride;
 
@@ -507,26 +518,35 @@ namespace vkglTF
 					posMin = glm::vec3(posAccessor.minValues[0], posAccessor.minValues[1], posAccessor.minValues[2]);
 					posMax = glm::vec3(posAccessor.maxValues[0], posAccessor.maxValues[1], posAccessor.maxValues[2]);
 					vertexCount = static_cast<uint32_t>(posAccessor.count);
-					posByteStride = posAccessor.ByteStride(posView) ? (posAccessor.ByteStride(posView) / sizeof(float)) : tinygltf::GetTypeSizeInBytes(TINYGLTF_TYPE_VEC3);
+					posByteStride = posAccessor.ByteStride(posView) ? (posAccessor.ByteStride(posView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC3);
 
 					if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
 						const tinygltf::Accessor &normAccessor = model.accessors[primitive.attributes.find("NORMAL")->second];
 						const tinygltf::BufferView &normView = model.bufferViews[normAccessor.bufferView];
 						bufferNormals = reinterpret_cast<const float *>(&(model.buffers[normView.buffer].data[normAccessor.byteOffset + normView.byteOffset]));
-						normByteStride = normAccessor.ByteStride(normView) ? (normAccessor.ByteStride(normView) / sizeof(float)) : tinygltf::GetTypeSizeInBytes(TINYGLTF_TYPE_VEC3);
+						normByteStride = normAccessor.ByteStride(normView) ? (normAccessor.ByteStride(normView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC3);
 					}
 
+					// UVs
 					if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
 						const tinygltf::Accessor &uvAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
 						const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
 						bufferTexCoordSet0 = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
-						uv0ByteStride = uvAccessor.ByteStride(uvView) ? (uvAccessor.ByteStride(uvView) / sizeof(float)) : tinygltf::GetTypeSizeInBytes(TINYGLTF_TYPE_VEC2);
+						uv0ByteStride = uvAccessor.ByteStride(uvView) ? (uvAccessor.ByteStride(uvView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC2);
 					}
 					if (primitive.attributes.find("TEXCOORD_1") != primitive.attributes.end()) {
 						const tinygltf::Accessor &uvAccessor = model.accessors[primitive.attributes.find("TEXCOORD_1")->second];
 						const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
 						bufferTexCoordSet1 = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
-						uv1ByteStride = uvAccessor.ByteStride(uvView) ? (uvAccessor.ByteStride(uvView) / sizeof(float)) : tinygltf::GetTypeSizeInBytes(TINYGLTF_TYPE_VEC2);
+						uv1ByteStride = uvAccessor.ByteStride(uvView) ? (uvAccessor.ByteStride(uvView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC2);
+					}
+
+					// Vertex colors
+					if (primitive.attributes.find("COLOR_0") != primitive.attributes.end()) {
+						const tinygltf::Accessor& accessor = model.accessors[primitive.attributes.find("COLOR_0")->second];
+						const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+						bufferColorSet0 = reinterpret_cast<const float*>(&(model.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+						color0ByteStride = accessor.ByteStride(view) ? (accessor.ByteStride(view) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC3);
 					}
 
 					// Skinning
@@ -536,24 +556,25 @@ namespace vkglTF
 						const tinygltf::BufferView &jointView = model.bufferViews[jointAccessor.bufferView];
 						bufferJoints = &(model.buffers[jointView.buffer].data[jointAccessor.byteOffset + jointView.byteOffset]);
 						jointComponentType = jointAccessor.componentType;
-						jointByteStride = jointAccessor.ByteStride(jointView) ? (jointAccessor.ByteStride(jointView) / tinygltf::GetComponentSizeInBytes(jointComponentType)) : tinygltf::GetTypeSizeInBytes(TINYGLTF_TYPE_VEC4);
+						jointByteStride = jointAccessor.ByteStride(jointView) ? (jointAccessor.ByteStride(jointView) / tinygltf::GetComponentSizeInBytes(jointComponentType)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC4);
 					}
 
 					if (primitive.attributes.find("WEIGHTS_0") != primitive.attributes.end()) {
 						const tinygltf::Accessor &weightAccessor = model.accessors[primitive.attributes.find("WEIGHTS_0")->second];
 						const tinygltf::BufferView &weightView = model.bufferViews[weightAccessor.bufferView];
 						bufferWeights = reinterpret_cast<const float *>(&(model.buffers[weightView.buffer].data[weightAccessor.byteOffset + weightView.byteOffset]));
-						weightByteStride = weightAccessor.ByteStride(weightView) ? (weightAccessor.ByteStride(weightView) / sizeof(float)) : tinygltf::GetTypeSizeInBytes(TINYGLTF_TYPE_VEC4);
+						weightByteStride = weightAccessor.ByteStride(weightView) ? (weightAccessor.ByteStride(weightView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC4);
 					}
 
 					hasSkin = (bufferJoints && bufferWeights);
 
 					for (size_t v = 0; v < posAccessor.count; v++) {
-						Vertex vert{};
+						Vertex& vert = loaderInfo.vertexBuffer[loaderInfo.vertexPos];
 						vert.pos = glm::vec4(glm::make_vec3(&bufferPos[v * posByteStride]), 1.0f);
 						vert.normal = glm::normalize(glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * normByteStride]) : glm::vec3(0.0f)));
 						vert.uv0 = bufferTexCoordSet0 ? glm::make_vec2(&bufferTexCoordSet0[v * uv0ByteStride]) : glm::vec3(0.0f);
 						vert.uv1 = bufferTexCoordSet1 ? glm::make_vec2(&bufferTexCoordSet1[v * uv1ByteStride]) : glm::vec3(0.0f);
+						vert.color = bufferColorSet0 ? glm::make_vec4(&bufferColorSet0[v * color0ByteStride]) : glm::vec4(1.0f);
 
 						if (hasSkin)
 						{
@@ -582,7 +603,7 @@ namespace vkglTF
 						if (glm::length(vert.weight0) == 0.0f) {
 							vert.weight0 = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
 						}
-						vertexBuffer.push_back(vert);
+						loaderInfo.vertexPos++;
 					}
 				}
 				// Indices
@@ -599,21 +620,24 @@ namespace vkglTF
 					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
 						const uint32_t *buf = static_cast<const uint32_t*>(dataPtr);
 						for (size_t index = 0; index < accessor.count; index++) {
-							indexBuffer.push_back(buf[index] + vertexStart);
+							loaderInfo.indexBuffer[loaderInfo.indexPos] = buf[index] + vertexStart;
+							loaderInfo.indexPos++;
 						}
 						break;
 					}
 					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT: {
 						const uint16_t *buf = static_cast<const uint16_t*>(dataPtr);
 						for (size_t index = 0; index < accessor.count; index++) {
-							indexBuffer.push_back(buf[index] + vertexStart);
+							loaderInfo.indexBuffer[loaderInfo.indexPos] = buf[index] + vertexStart;
+							loaderInfo.indexPos++;
 						}
 						break;
 					}
 					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE: {
 						const uint8_t *buf = static_cast<const uint8_t*>(dataPtr);
 						for (size_t index = 0; index < accessor.count; index++) {
-							indexBuffer.push_back(buf[index] + vertexStart);
+							loaderInfo.indexBuffer[loaderInfo.indexPos] = buf[index] + vertexStart;
+							loaderInfo.indexPos++;
 						}
 						break;
 					}
@@ -643,6 +667,25 @@ namespace vkglTF
 			nodes.push_back(newNode);
 		}
 		linearNodes.push_back(newNode);
+	}
+
+	void Model::getNodeProps(const tinygltf::Node& node, const tinygltf::Model& model, size_t& vertexCount, size_t& indexCount)
+	{
+		if (node.children.size() > 0) {
+			for (size_t i = 0; i < node.children.size(); i++) {
+				getNodeProps(model.nodes[node.children[i]], model, vertexCount, indexCount);
+			}
+		}
+		if (node.mesh > -1) {
+			const tinygltf::Mesh mesh = model.meshes[node.mesh];
+			for (size_t i = 0; i < mesh.primitives.size(); i++) {
+				auto primitive = mesh.primitives[i];
+				vertexCount += model.accessors[primitive.attributes.find("POSITION")->second].count;
+				if (primitive.indices > -1) {
+					indexCount += model.accessors[primitive.indices].count;
+				}
+			}
+		}
 	}
 
 	void Model::loadSkins(tinygltf::Model &gltfModel)
@@ -702,6 +745,7 @@ namespace vkglTF
 	VkSamplerAddressMode Model::getVkWrapMode(int32_t wrapMode)
 	{
 		switch (wrapMode) {
+		case -1:
 		case 10497:
 			return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		case 33071:
@@ -709,11 +753,15 @@ namespace vkglTF
 		case 33648:
 			return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 		}
+
+		std::cerr << "Unknown wrap mode for getVkWrapMode: " << wrapMode << std::endl;
+		return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	}
 
 	VkFilter Model::getVkFilterMode(int32_t filterMode)
 	{
 		switch (filterMode) {
+		case -1:
 		case 9728:
 			return VK_FILTER_NEAREST;
 		case 9729:
@@ -727,6 +775,9 @@ namespace vkglTF
 		case 9987:
 			return VK_FILTER_LINEAR;
 		}
+
+		std::cerr << "Unknown filter mode for getVkFilterMode: " << filterMode << std::endl;
+		return VK_FILTER_NEAREST;
 	}
 
 	void Model::loadTextureSamplers(tinygltf::Model &gltfModel)
@@ -746,6 +797,7 @@ namespace vkglTF
 	{
 		for (tinygltf::Material &mat : gltfModel.materials) {
 			vkglTF::Material material{};
+			material.doubleSided = mat.doubleSided;
 			if (mat.values.find("baseColorTexture") != mat.values.end()) {
 				material.baseColorTexture = &textures[mat.values["baseColorTexture"].TextureIndex()];
 				material.texCoordSets.baseColor = mat.values["baseColorTexture"].TextureTexCoord();
@@ -790,7 +842,6 @@ namespace vkglTF
 			}
 			if (mat.additionalValues.find("emissiveFactor") != mat.additionalValues.end()) {
 				material.emissiveFactor = glm::vec4(glm::make_vec3(mat.additionalValues["emissiveFactor"].ColorFactor().data()), 1.0);
-				material.emissiveFactor = glm::vec4(0.0f);
 			}
 
 			// Extensions
@@ -824,6 +875,19 @@ namespace vkglTF
 				}
 			}
 
+			if (mat.extensions.find("KHR_materials_unlit") != mat.extensions.end()) {
+				material.unlit = true;
+			}
+
+			if (mat.extensions.find("KHR_materials_emissive_strength") != mat.extensions.end()) {
+				auto ext = mat.extensions.find("KHR_materials_emissive_strength");
+				if (ext->second.Has("emissiveStrength")) {
+					auto value = ext->second.Get("emissiveStrength");
+					material.emissiveStrength = (float)value.Get<double>();
+				}
+			}
+
+			material.index = static_cast<uint32_t>(materials.size());
 			materials.push_back(material);
 		}
 		// Push a default material at the end of the list for meshes with no material assigned
@@ -942,10 +1006,11 @@ namespace vkglTF
 		}
 	}
 
-	void Model::loadFromFile(std::string filename, vks::VulkanDevice *device, VkQueue transferQueue, float scale)
+	void Model::loadFromFile(std::string filename, vks::VulkanDevice* device, VkQueue transferQueue, float scale)
 	{
 		tinygltf::Model gltfModel;
 		tinygltf::TinyGLTF gltfContext;
+
 		std::string error;
 		std::string warning;
 
@@ -955,22 +1020,32 @@ namespace vkglTF
 		size_t extpos = filename.rfind('.', filename.length());
 		if (extpos != std::string::npos) {
 			binary = (filename.substr(extpos + 1, filename.length() - extpos) == "glb");
-		}  
+		}
 
 		bool fileLoaded = binary ? gltfContext.LoadBinaryFromFile(&gltfModel, &error, &warning, filename.c_str()) : gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
 
-		std::vector<uint32_t> indexBuffer;
-		std::vector<Vertex> vertexBuffer;
+		LoaderInfo loaderInfo{};
+		size_t vertexCount = 0;
+		size_t indexCount = 0;
 
 		if (fileLoaded) {
 			loadTextureSamplers(gltfModel);
 			loadTextures(gltfModel, device, transferQueue);
 			loadMaterials(gltfModel);
+
+			const tinygltf::Scene& scene = gltfModel.scenes[gltfModel.defaultScene > -1 ? gltfModel.defaultScene : 0];
+
+			// Get vertex and index buffer sizes up-front
+			for (size_t i = 0; i < scene.nodes.size(); i++) {
+				getNodeProps(gltfModel.nodes[scene.nodes[i]], gltfModel, vertexCount, indexCount);
+			}
+			loaderInfo.vertexBuffer = new Vertex[vertexCount];
+			loaderInfo.indexBuffer = new uint32_t[indexCount];
+
 			// TODO: scene handling with no default scene
-			const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene > -1 ? gltfModel.defaultScene : 0];
 			for (size_t i = 0; i < scene.nodes.size(); i++) {
 				const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
-				loadNode(nullptr, node, scene.nodes[i], gltfModel, indexBuffer, vertexBuffer, scale);
+				loadNode(nullptr, node, scene.nodes[i], gltfModel, loaderInfo, scale);
 			}
 			if (gltfModel.animations.size() > 0) {
 				loadAnimations(gltfModel);
@@ -996,9 +1071,8 @@ namespace vkglTF
 
 		extensions = gltfModel.extensionsUsed;
 
-		size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
-		size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
-		indices.count = static_cast<uint32_t>(indexBuffer.size());
+		size_t vertexBufferSize = vertexCount * sizeof(Vertex);
+		size_t indexBufferSize = indexCount * sizeof(uint32_t);
 
 		assert(vertexBufferSize > 0);
 
@@ -1015,7 +1089,7 @@ namespace vkglTF
 			vertexBufferSize,
 			&vertexStaging.buffer,
 			&vertexStaging.memory,
-			vertexBuffer.data()));
+			loaderInfo.vertexBuffer));
 		// Index data
 		if (indexBufferSize > 0) {
 			VK_CHECK_RESULT(device->createBuffer(
@@ -1024,7 +1098,7 @@ namespace vkglTF
 				indexBufferSize,
 				&indexStaging.buffer,
 				&indexStaging.memory,
-				indexBuffer.data()));
+				loaderInfo.indexBuffer));
 		}
 
 		// Create device local buffers
@@ -1066,6 +1140,9 @@ namespace vkglTF
 			vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
 			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
 		}
+
+		delete[] loaderInfo.vertexBuffer;
+		delete[] loaderInfo.indexBuffer;
 
 		getSceneDimensions();
 	}

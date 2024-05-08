@@ -1,3 +1,9 @@
+/* Copyright (c) 2018-2023, Sascha Willems
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ */
+
 #version 450
 
 layout (location = 0) in vec3 inPos;
@@ -7,10 +13,6 @@ layout(push_constant) uniform PushConsts {
 } pushConsts;
 
 layout (location = 0) out vec3 outUVW;
-
-out gl_PerVertex {
-	vec4 gl_Position;
-};
 
 void main() 
 {

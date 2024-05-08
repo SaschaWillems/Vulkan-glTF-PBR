@@ -1,3 +1,9 @@
+/* Copyright (c) 2018-2023, Sascha Willems
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ */
+
 #version 450
 
 layout (location = 0) in vec3 inPos;
@@ -96,7 +102,6 @@ vec3 prefilterEnvMap(vec3 R, float roughness)
 	}
 	return (color / totalWeight);
 }
-
 
 void main()
 {		

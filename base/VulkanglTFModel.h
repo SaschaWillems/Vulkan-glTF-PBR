@@ -1,7 +1,7 @@
 /**
  * Vulkan glTF model and texture loading class based on tinyglTF (https://github.com/syoyo/tinygltf)
  *
- * Copyright (C) 2018-2021 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2024 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -31,11 +31,14 @@
 #pragma message ("ERROR constant already defined, undefining")
 #endif
 
-#include "tiny_gltf.h"
+#define TINYGLTF_NO_STB_IMAGE_WRITE
 
 #if defined(__ANDROID__)
+#define TINYGLTF_ANDROID_LOAD_FROM_ASSETS
 #include <android/asset_manager.h>
 #endif
+
+#include "tiny_gltf.h"
 
 // Changing this value here also requires changing it in the vertex shader
 #define MAX_NUM_JOINTS 128u
@@ -85,12 +88,13 @@ namespace vkglTF
 		float metallicFactor = 1.0f;
 		float roughnessFactor = 1.0f;
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
-		glm::vec4 emissiveFactor = glm::vec4(1.0f);
+		glm::vec4 emissiveFactor = glm::vec4(0.0f);
 		vkglTF::Texture *baseColorTexture;
 		vkglTF::Texture *metallicRoughnessTexture;
 		vkglTF::Texture *normalTexture;
 		vkglTF::Texture *occlusionTexture;
 		vkglTF::Texture *emissiveTexture;
+		bool doubleSided = false;
 		struct TexCoordSets {
 			uint8_t baseColor = 0;
 			uint8_t metallicRoughness = 0;
@@ -110,6 +114,9 @@ namespace vkglTF
 			bool specularGlossiness = false;
 		} pbrWorkflows;
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		int index = 0;
+		bool unlit = false;
+		float emissiveStrength = 1.0f;
 	};
 
 	struct Primitive {
@@ -166,6 +173,9 @@ namespace vkglTF
 		glm::quat rotation{};
 		BoundingBox bvh;
 		BoundingBox aabb;
+		bool useCachedMatrix{ false };
+		glm::mat4 cachedLocalMatrix{ glm::mat4(1.0f) };
+		glm::mat4 cachedMatrix{ glm::mat4(1.0f) };
 		glm::mat4 localMatrix();
 		glm::mat4 getMatrix();
 		void update();
@@ -205,6 +215,7 @@ namespace vkglTF
 			glm::vec2 uv1;
 			glm::vec4 joint0;
 			glm::vec4 weight0;
+			glm::vec4 color;
 		};
 
 		struct Vertices {
@@ -212,7 +223,6 @@ namespace vkglTF
 			VkDeviceMemory memory;
 		} vertices;
 		struct Indices {
-			int count;
 			VkBuffer buffer = VK_NULL_HANDLE;
 			VkDeviceMemory memory;
 		} indices;
@@ -235,8 +245,16 @@ namespace vkglTF
 			glm::vec3 max = glm::vec3(-FLT_MAX);
 		} dimensions;
 
+		struct LoaderInfo {
+			uint32_t* indexBuffer;
+			Vertex* vertexBuffer;
+			size_t indexPos = 0;
+			size_t vertexPos = 0;
+		};
+
 		void destroy(VkDevice device);
-		void loadNode(vkglTF::Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, const tinygltf::Model& model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale);
+		void loadNode(vkglTF::Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, const tinygltf::Model& model, LoaderInfo& loaderInfo, float globalscale);
+		void getNodeProps(const tinygltf::Node& node, const tinygltf::Model& model, size_t& vertexCount, size_t& indexCount);
 		void loadSkins(tinygltf::Model& gltfModel);
 		void loadTextures(tinygltf::Model& gltfModel, vks::VulkanDevice* device, VkQueue transferQueue);
 		VkSamplerAddressMode getVkWrapMode(int32_t wrapMode);

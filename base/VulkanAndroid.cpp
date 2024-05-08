@@ -70,6 +70,7 @@ PFN_vkDestroyCommandPool vkDestroyCommandPool;
 PFN_vkAllocateCommandBuffers vkAllocateCommandBuffers;
 PFN_vkBeginCommandBuffer vkBeginCommandBuffer;
 PFN_vkEndCommandBuffer vkEndCommandBuffer;
+PFN_vkResetCommandBuffer vkResetCommandBuffer;
 PFN_vkGetDeviceQueue vkGetDeviceQueue;
 PFN_vkQueueSubmit vkQueueSubmit;
 PFN_vkQueueWaitIdle vkQueueWaitIdle;
@@ -217,6 +218,7 @@ namespace vks
 			vkAllocateCommandBuffers = reinterpret_cast<PFN_vkAllocateCommandBuffers>(vkGetInstanceProcAddr(instance, "vkAllocateCommandBuffers"));
 			vkBeginCommandBuffer = reinterpret_cast<PFN_vkBeginCommandBuffer>(vkGetInstanceProcAddr(instance, "vkBeginCommandBuffer"));
 			vkEndCommandBuffer = reinterpret_cast<PFN_vkEndCommandBuffer>(vkGetInstanceProcAddr(instance, "vkEndCommandBuffer"));
+            vkResetCommandBuffer = reinterpret_cast<PFN_vkResetCommandBuffer>(vkGetInstanceProcAddr(instance, "vkResetCommandBuffer"));
 
 			vkGetDeviceQueue = reinterpret_cast<PFN_vkGetDeviceQueue>(vkGetInstanceProcAddr(instance, "vkGetDeviceQueue"));
 			vkQueueSubmit = reinterpret_cast<PFN_vkQueueSubmit>(vkGetInstanceProcAddr(instance, "vkQueueSubmit"));
