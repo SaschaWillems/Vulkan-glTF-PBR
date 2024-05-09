@@ -103,6 +103,7 @@ extern PFN_vkDestroyCommandPool vkDestroyCommandPool;
 extern PFN_vkAllocateCommandBuffers vkAllocateCommandBuffers;
 extern PFN_vkBeginCommandBuffer vkBeginCommandBuffer;
 extern PFN_vkEndCommandBuffer vkEndCommandBuffer;
+extern PFN_vkResetCommandBuffer vkResetCommandBuffer;
 extern PFN_vkGetDeviceQueue vkGetDeviceQueue;
 extern PFN_vkQueueSubmit vkQueueSubmit;
 extern PFN_vkQueueWaitIdle vkQueueWaitIdle;

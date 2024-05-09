@@ -10,6 +10,9 @@
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
+#if defined(__ANDROID__)
+#define TINYGLTF_ANDROID_LOAD_FROM_ASSETS
+#endif
 #define STBI_MSC_SECURE_CRT
 
 #include "VulkanglTFModel.h"
@@ -1167,7 +1170,7 @@ namespace vkglTF
 	}
 
 	void Model::calculateBoundingBox(Node *node, Node *parent) {
-		BoundingBox& parentBvh = parent ? parent->bvh : BoundingBox(dimensions.min, dimensions.max);
+		BoundingBox parentBvh = parent ? parent->bvh : BoundingBox(dimensions.min, dimensions.max);
 
 		if (node->mesh) {
 			if (node->mesh->bb.valid) {
