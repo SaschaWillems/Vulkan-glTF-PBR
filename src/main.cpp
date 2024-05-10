@@ -204,6 +204,12 @@ public:
 		delete ui;
 	}
 
+	void resetCamera() {
+		camera.setPosition({ 0.0f, 0.0f, 1.0f });
+		camera.setRotation({ 0.0f, 0.0f, 0.0f });
+		camera.updateViewMatrix();
+	}
+
 	void renderNode(vkglTF::Node *node, uint32_t cbIndex, vkglTF::Material::AlphaMode alphaMode) {
 		if (node->mesh) {
 			// Render mesh primitives
@@ -420,8 +426,7 @@ public:
 		createMaterialBuffer();
 		auto tFileLoad = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - tStart).count();
 		std::cout << "Loading took " << tFileLoad << " ms" << std::endl;
-		camera.setPosition({ 0.0f, 0.0f, 1.0f });
-		camera.setRotation({ 0.0f, 0.0f, 0.0f });
+		resetCamera();
 	}
 
 	void loadEnvironment(std::string filename)
@@ -1851,7 +1856,6 @@ public:
 		ui->pushConstBlock.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);
 		ui->pushConstBlock.translate = glm::vec2(-1.0f);
 
-		bool updateShaderParams = false;
 		float scale = 1.0f;
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
@@ -1860,7 +1864,7 @@ public:
 		ImGui::NewFrame();
 
 		ImGui::SetNextWindowPos(ImVec2(10, 10));
-		ImGui::SetNextWindowSize(ImVec2(200 * scale, (models.scene.animations.size() > 0 ? 440 : 360) * scale), ImGuiSetCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(200 * scale, (models.scene.animations.size() > 0 ? 500 : 420) * scale), ImGuiSetCond_Always);
 		ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
 		ImGui::PushItemWidth(100.0f * scale);
 
@@ -1909,7 +1913,7 @@ public:
 				}
 			}
 #endif
-			if (ui->combo("Environment", selectedEnvironment, environments)) {
+			if (ui->combo("Environment##env", selectedEnvironment, environments)) {
 				vkDeviceWaitIdle(device);
 				loadEnvironment(environments[selectedEnvironment]);
 				setupDescriptors();
@@ -1917,17 +1921,18 @@ public:
 		}
 
 		if (ui->header("Environment")) {
-			if (ui->checkbox("Background", &displayBackground)) {
-				updateShaderParams = true;
-			}
-			if (ui->slider("Exposure", &shaderValuesParams.exposure, 0.1f, 10.0f)) {
-				updateShaderParams = true;
-			}
-			if (ui->slider("Gamma", &shaderValuesParams.gamma, 0.1f, 4.0f)) {
-				updateShaderParams = true;
-			}
-			if (ui->slider("IBL", &shaderValuesParams.scaleIBLAmbient, 0.0f, 1.0f)) {
-				updateShaderParams = true;
+			ui->checkbox("Background", &displayBackground);
+			ui->slider("Exposure", &shaderValuesParams.exposure, 0.1f, 10.0f);
+			ui->slider("Gamma", &shaderValuesParams.gamma, 0.1f, 4.0f);
+			ui->slider("IBL", &shaderValuesParams.scaleIBLAmbient, 0.0f, 1.0f);
+		}
+
+		if (ui->header("Camera")) {
+			const std::vector<std::string> cameraTypes = { "Look at", "First Person" };
+			int32_t cameraTypeSelection = (int32_t)camera.type;
+			if (ui->combo("Type", &cameraTypeSelection, cameraTypes)) {
+				camera.type = (Camera::CameraType)cameraTypeSelection;
+				resetCamera();
 			}
 		}
 
@@ -1937,14 +1942,12 @@ public:
 			};
 			if (ui->combo("Inputs", &debugViewInputs, debugNamesInputs)) {
 				shaderValuesParams.debugViewInputs = static_cast<float>(debugViewInputs);
-				updateShaderParams = true;
 			}
 			const std::vector<std::string> debugNamesEquation = {
 				"none", "Diff (l,n)", "F (l,h)", "G (l,v,h)", "D (h)", "Specular"
 			};
 			if (ui->combo("PBR equation", &debugViewEquation, debugNamesEquation)) {
 				shaderValuesParams.debugViewEquation = static_cast<float>(debugViewEquation);
-				updateShaderParams = true;
 			}
 		}
 
@@ -2000,10 +2003,6 @@ public:
 			ui->vertexBuffer.flush();
 			ui->indexBuffer.flush();
 
-		}
-
-		if (updateShaderParams) {
-			updateParams();
 		}
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)

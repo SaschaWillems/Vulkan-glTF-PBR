@@ -1,7 +1,7 @@
 /*
 * Basic camera class
 *
-* Copyright (C) 2016 by Sascha Willems - www.saschawillems.de
+* Copyright (C) 2016-2024 by Sascha Willems - www.saschawillems.de
 *
 * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
 */
@@ -17,31 +17,8 @@ class Camera
 private:
 	float fov;
 	float znear, zfar;
-
-	void updateViewMatrix()
-	{
-		glm::mat4 rotM = glm::mat4(1.0f);
-		glm::mat4 transM;
-
-		rotM = glm::rotate(rotM, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-		rotM = glm::rotate(rotM, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-		rotM = glm::rotate(rotM, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-
-		transM = glm::translate(glm::mat4(1.0f), position * glm::vec3(1.0f, 1.0f, -1.0f));
-
-		if (type == CameraType::firstperson)
-		{
-			matrices.view = rotM * transM;
-		}
-		else
-		{
-			matrices.view = transM * rotM;
-		}
-
-		updated = true;
-	};
 public:
-	enum CameraType { lookat, firstperson };
+	enum CameraType { lookat = 0, firstperson = 1 };
 	CameraType type = CameraType::lookat;
 
 	glm::vec3 rotation = glm::vec3();
@@ -121,6 +98,29 @@ public:
 		this->position += delta;
 		updateViewMatrix();
 	}
+
+	void updateViewMatrix()
+	{
+		glm::mat4 rotM = glm::mat4(1.0f);
+		glm::mat4 transM;
+
+		rotM = glm::rotate(rotM, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+		rotM = glm::rotate(rotM, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+		rotM = glm::rotate(rotM, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+
+		transM = glm::translate(glm::mat4(1.0f), position * glm::vec3(1.0f, 1.0f, -1.0f));
+
+		if (type == CameraType::firstperson)
+		{
+			matrices.view = rotM * transM;
+		}
+		else
+		{
+			matrices.view = transM * rotM;
+		}
+
+		updated = true;
+	};
 
 	void update(float deltaTime)
 	{
