@@ -53,7 +53,7 @@ The physical based render model uses multiple source images for the lighting equ
 
 This pass generates a 2D BRDF lookup table based on the formulas used in the pbr implementation. The lookup table contains BRDF values for roughness and view angle and is stored as a 16-bit per component floating point texture to provide proper precision.
 
-See ```VulkanExample::generateBRDFLUT()```
+See ```VulkanApplication::generateBRDFLUT()```
 
 ### Irradiance cube map
 
@@ -63,7 +63,7 @@ See ```VulkanExample::generateBRDFLUT()```
 
 Generates a small (64 x 64 px) irradiance cube map from that stores the light radiated from the surrounding environment. This is sampled for the **indirect diffuse** part of the lighting equation.
 
-See ```VulkanExample::generateCubemaps()``` with target ```IRRADIANCE```
+See ```VulkanApplication::generateCubemaps()``` with target ```IRRADIANCE```
 
 ### Pre-filtered (mip-mapped radiance) environment cube map
 
@@ -79,7 +79,7 @@ Complete mip chain from *left* roughness = 0.0 to *right* roughness = 1.0:
 
 (*note:* down/up sized to same size for visualization)
 
-See ```VulkanExample::generateCubemaps()``` with target ```PREFILTEREDENV```
+See ```VulkanApplication::generateCubemaps()``` with target ```PREFILTEREDENV```
 
 ## Cloning
 This repository contains submodules for some of the external dependencies, so when doing a fresh clone you need to clone recursively:
