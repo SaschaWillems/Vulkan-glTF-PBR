@@ -1,4 +1,4 @@
-/* Copyright (c) 2018-2023, Sascha Willems
+/* Copyright (c) 2018-2024, Sascha Willems
  *
  * SPDX-License-Identifier: MIT
  *
@@ -300,11 +300,11 @@ void main()
 	vec3 specularEnvironmentR90 = vec3(1.0, 1.0, 1.0) * reflectance90;
 
 	vec3 n = (material.normalTextureSet > -1) ? getNormal(material) : normalize(inNormal);
+	n.y *= -1.0f;
 	vec3 v = normalize(ubo.camPos - inWorldPos);    // Vector from surface point to camera
 	vec3 l = normalize(uboParams.lightDir.xyz);     // Vector from surface point to light
 	vec3 h = normalize(l+v);                        // Half vector between both l and v
-	vec3 reflection = -normalize(reflect(v, n));
-	reflection.y *= -1.0f;
+	vec3 reflection = normalize(reflect(-v, n));
 
 	float NdotL = clamp(dot(n, l), 0.001, 1.0);
 	float NdotV = clamp(abs(dot(n, v)), 0.001, 1.0);

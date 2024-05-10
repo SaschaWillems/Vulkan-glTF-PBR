@@ -1753,11 +1753,9 @@ public:
 		shaderValuesScene.model[2][2] = scale;
 		shaderValuesScene.model = glm::translate(shaderValuesScene.model, translate);
 
-		shaderValuesScene.camPos = glm::vec3(
-			-camera.position.z * sin(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x)),
-			-camera.position.z * sin(glm::radians(camera.rotation.x)),
-			 camera.position.z * cos(glm::radians(camera.rotation.y)) * cos(glm::radians(camera.rotation.x))
-		);
+		// Shader requires camera position in world space
+		glm::mat4 cv = glm::inverse(camera.matrices.view);
+		shaderValuesScene.camPos = glm::vec3(cv[3]);
 
 		// Skybox
 		shaderValuesSkybox.projection = camera.matrices.perspective;
