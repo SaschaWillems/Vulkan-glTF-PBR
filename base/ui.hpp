@@ -1,7 +1,7 @@
 /*
 * Vulkan Example - Physical based rendering a glTF 2.0 model with image based lighting
 *
-* Copyright (C) 2018 by Sascha Willems - www.saschawillems.de
+* Copyright (C) 2018-2024 by Sascha Willems - www.saschawillems.de
 *
 * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
 */
@@ -35,6 +35,7 @@ public:
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorSet descriptorSet;
+	float updateTimer = 0.0f;
 
 	struct PushConstBlock {
 		glm::vec2 scale;

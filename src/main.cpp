@@ -2018,7 +2018,11 @@ public:
 			return;
 		}
 
-		updateOverlay();
+		ui->updateTimer -= frameTimer;
+		if (ui->updateTimer <= 0.0f) {
+			updateOverlay();
+			ui->updateTimer = 1.0f / 60.0f;
+		}
 
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX));
 		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));
