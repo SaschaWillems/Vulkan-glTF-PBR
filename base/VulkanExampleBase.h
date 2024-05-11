@@ -115,8 +115,14 @@ public:
 		bool validation = false;
 		bool fullscreen = false;
 		bool vsync = false;
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+		// MSAA is costly on Android and barely visible due to high resolution displays, so disable b default
+		bool multiSampling = false;
+		VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
+#else
 		bool multiSampling = true;
 		VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_4_BIT;
+#endif
 	} settings;
 	
 	struct DepthStencil {
