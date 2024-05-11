@@ -1,7 +1,7 @@
 /*
 * Vulkan utilities
 *
-* Copyright(C) 2018 by Sascha Willems - www.saschawillems.de
+* Copyright(C) 2018-2024 by Sascha Willems - www.saschawillems.de
 *
 * This code is licensed under the MIT license(MIT) (http://opensource.org/licenses/MIT)
 */
@@ -118,20 +118,24 @@ VkPipelineShaderStageCreateInfo loadShader(VkDevice device, std::string filename
 	return shaderStage;
 }
 
-void readDirectory(const std::string& directory, const std::string &pattern, std::map<std::string, std::string> &filelist, bool recursive)
+void readDirectory(const std::string& directory, const std::string &extension, std::map<std::string, std::string> &filelist, bool recursive)
 {
+	const std::string test = "d:/test/test.gltf";
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 	AAssetDir* assetDir = AAssetManager_openDir(androidApp->activity->assetManager, directory.c_str());
 	AAssetDir_rewind(assetDir);
 	const char* assetName;
 	while ((assetName = AAssetDir_getNextFileName(assetDir)) != 0) {
 		std::string filename(assetName);
+		if (filename.find(extension) == std::string::npos) {
+			continue;
+		}
 		filename.erase(filename.find_last_of("."), std::string::npos);
 		filelist[filename] = directory + "/" + assetName;
 	}
 	AAssetDir_close(assetDir);
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
-	std::string searchpattern(directory + "/" + pattern);
+	std::string searchpattern(directory + "/*" + extension);
 	WIN32_FIND_DATA data;
 	HANDLE hFind;
 	if ((hFind = FindFirstFile(searchpattern.c_str(), &data)) != INVALID_HANDLE_VALUE) {
@@ -152,7 +156,7 @@ void readDirectory(const std::string& directory, const std::string &pattern, std
 					strcat(subdir, "/");
 					strcat(subdir, data.cFileName);
 					if ((strcmp(data.cFileName, ".") != 0) && (strcmp(data.cFileName, "..") != 0)) {
-						readDirectory(subdir, pattern, filelist, recursive);
+						readDirectory(subdir, extension, filelist, recursive);
 					}
 				}
 			} while (FindNextFile(hFind, &data) != 0);
@@ -160,8 +164,6 @@ void readDirectory(const std::string& directory, const std::string &pattern, std
 		}
 	}
 #elif defined(__linux__)
-	std::string patternExt = pattern;
-	patternExt.erase(0, pattern.find_last_of("."));
 	struct dirent *entry;
 	DIR *dir = opendir(directory.c_str());
 	if (dir == NULL) {
@@ -170,7 +172,7 @@ void readDirectory(const std::string& directory, const std::string &pattern, std
 	while ((entry = readdir(dir)) != NULL) {
 		if (entry->d_type == DT_REG) {
 			std::string filename(entry->d_name);
-			if (filename.find(patternExt) != std::string::npos) {
+			if (filename.find(extension) != std::string::npos) {
 				filename.erase(filename.find_last_of("."), std::string::npos);
 				filelist[filename] = directory + "/" + entry->d_name;
 			}
@@ -178,7 +180,7 @@ void readDirectory(const std::string& directory, const std::string &pattern, std
 		if (recursive && (entry->d_type == DT_DIR)) {
 			std::string subdir = directory + "/" + entry->d_name;
 			if ((strcmp(entry->d_name, ".") != 0) && (strcmp(entry->d_name, "..") != 0)) {
-				readDirectory(subdir, pattern, filelist, recursive);
+				readDirectory(subdir, extension, filelist, recursive);
 			}
 		}
 	}

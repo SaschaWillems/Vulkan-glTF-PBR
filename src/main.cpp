@@ -445,7 +445,7 @@ public:
 	{
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 		tinygltf::asset_manager = androidApp->activity->assetManager;
-		readDirectory(assetpath + "models", "*.gltf", scenes, true);
+		readDirectory(assetpath + "models", "gltf", scenes, true);
 #else
 		struct stat info;
 		if (stat(assetpath.c_str(), &info) != 0) {
@@ -454,7 +454,7 @@ public:
 			exit(-1);
 		}
 #endif
-		readDirectory(assetpath + "environments", "*.ktx", environments, false);
+		readDirectory(assetpath + "environments", "ktx", environments, false);
 
 		textures.empty.loadFromFile(assetpath + "textures/empty.ktx", VK_FORMAT_R8G8B8A8_UNORM, vulkanDevice, queue);
 
@@ -1790,7 +1790,7 @@ public:
 
 		camera.type = Camera::CameraType::lookat;
 
-		camera.setPerspective(45.0f, (float)width / (float)height, 0.1f, 256.0f);
+		camera.setPerspective(45.0f, (float)width / (float)height, 0.01f, 256.0f);
 		camera.rotationSpeed = 0.25f;
 		camera.movementSpeed = 0.1f;
 		camera.setPosition({ 0.0f, 0.0f, 1.0f });
