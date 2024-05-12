@@ -3,7 +3,7 @@
 * 
 * A swap chain is a collection of framebuffers used for rendering and presentation to the windowing system
 *
-* Copyright (C) 2016-2023 by Sascha Willems - www.saschawillems.de
+* Copyright (C) 2016-2024 by Sascha Willems - www.saschawillems.de
 *
 * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
 */
@@ -193,27 +193,29 @@ public:
 		std::vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
 		VK_CHECK_RESULT(fpGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, surfaceFormats.data()));
 
-		// We ideally want to use an 8-Bit per channel RGBA sRGB format, so we try to find it in the list of available formats aaa
+        // We want to get a format that best suits our needs, so we try to get one from a set of preferred formats
+        // Initialize the format to the first one returned by the implementation in case we can't find one of the preferred formats
+        VkSurfaceFormatKHR selectedFormat = surfaceFormats[0];
 #ifdef HDR
-		const VkFormat preferredFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+        std::vector<VkFormat> preferredImageFormats = {
+                VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+        };
 #else
-		const VkFormat preferredFormat = VK_FORMAT_B8G8R8A8_SRGB;
+        std::vector<VkFormat> preferredImageFormats = {
+                VK_FORMAT_B8G8R8A8_SRGB,
+                VK_FORMAT_R8G8B8A8_SRGB,
+                VK_FORMAT_A8B8G8R8_SRGB_PACK32,
+        };
 #endif
-		bool foundPreferredFormat = false;
-		for (auto& surfaceFormat : surfaceFormats) {
-			if (surfaceFormat.format == preferredFormat) {
-				colorFormat = surfaceFormat.format;
-				colorSpace = surfaceFormat.colorSpace;
-				foundPreferredFormat = true;
-				break;
-			}
-		}
+        for (auto& availableFormat : surfaceFormats) {
+            if (std::find(preferredImageFormats.begin(), preferredImageFormats.end(), availableFormat.format) != preferredImageFormats.end()) {
+                selectedFormat = availableFormat;
+                break;
+            }
+        }
 
-		// In case our preferred format isn't available, we just select the first available format
-		if (!foundPreferredFormat) {
-			colorFormat = surfaceFormats[0].format;
-			colorSpace = surfaceFormats[0].colorSpace;
-		}
+        colorFormat = selectedFormat.format;
+        colorSpace = selectedFormat.colorSpace;
 	}
 
 	/**

@@ -120,7 +120,6 @@ VkPipelineShaderStageCreateInfo loadShader(VkDevice device, std::string filename
 
 void readDirectory(const std::string& directory, const std::string &extension, std::map<std::string, std::string> &filelist, bool recursive)
 {
-	const std::string test = "d:/test/test.gltf";
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 	AAssetDir* assetDir = AAssetManager_openDir(androidApp->activity->assetManager, directory.c_str());
 	AAssetDir_rewind(assetDir);

@@ -116,7 +116,7 @@ make
 
 ### Android 
 
-<img src="./screenshots/android_screenshots.jpg" width="644px">
+<img src="./screenshots/damagedhelmet_android.png" width="644px">
 
 #### Prerequisites
 
@@ -129,7 +129,7 @@ make
 - Select the ```android``` sub folder of the repository
 - Once import has finished the project can be build, run and debugged from Android Studio
 
-NOTE: Android SDK API version is set to 33(Android 13).
+NOTE: Android SDK API version is set to 33 (Android 13).
 
 ## How to enable Draco mesh compression
 In order to enable support for loading Draco compressed glTF files you need to:
