@@ -116,7 +116,7 @@ make
 
 ### Android 
 
-<img src="./screenshots/damagedhelmet_android.png" width="644px">
+<img src="./screenshots/damagedhelmet_android.jpg" width="644px">
 
 #### Prerequisites
 
