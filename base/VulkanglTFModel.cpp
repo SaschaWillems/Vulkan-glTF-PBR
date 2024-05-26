@@ -98,9 +98,10 @@ namespace vkglTF
 		VkDeviceSize bufferSize = 0;
 		bool deleteBuffer = false;
 
+		VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+
 		if (isKtx2) {
 			// @todo: only do once at init, if ext is detected
-			//basist::etc1_global_selector_codebook sel_codebook(basist::g_global_selector_cb_size, basist::g_global_selector_cb);
 			basist::basisu_transcoder_init();
 			basist::ktx2_transcoder dec;
 			const std::string filename = path + "\\" + gltfimage.uri;
@@ -114,8 +115,51 @@ namespace vkglTF
 			ifs.read(inputData, inputDataSize);
 			bool success = dec.init(inputData, inputDataSize);
 
-			// @todo: select supported compressed formats instead of uncompressed RGBA
+			// Select target format based on device features (use uncompressed if none supported)
 			auto targetFormat = basist::transcoder_texture_format::cTFRGBA32;
+
+			auto formatSupported = [device](VkFormat format) {
+				VkFormatProperties formatProperties;
+				vkGetPhysicalDeviceFormatProperties(device->physicalDevice, format, &formatProperties);
+				return ((formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_TRANSFER_DST_BIT) && (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT));
+			};
+
+			if (device->features.textureCompressionBC)
+			{
+				// BC7 is the preferred block compression if available
+				if (formatSupported(VK_FORMAT_BC7_UNORM_BLOCK))
+				{
+					targetFormat = basist::transcoder_texture_format::cTFBC7_RGBA;
+					format = VK_FORMAT_BC7_UNORM_BLOCK;
+				} else {
+					if (formatSupported(VK_FORMAT_BC3_SRGB_BLOCK))
+					{
+						targetFormat = basist::transcoder_texture_format::cTFBC3_RGBA;
+						format = VK_FORMAT_BC3_SRGB_BLOCK;
+					}
+				}
+			}
+			// Adaptive scalable texture compression
+			if (device->features.textureCompressionASTC_LDR)
+			{
+				if (formatSupported(VK_FORMAT_ASTC_4x4_SRGB_BLOCK))
+				{
+					targetFormat = basist::transcoder_texture_format::cTFASTC_4x4_RGBA;
+					format = VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
+				}
+			}
+			// Ericsson texture compression
+			if (device->features.textureCompressionETC2)
+			{
+				if (formatSupported(VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK))
+				{
+					targetFormat = basist::transcoder_texture_format::cTFETC2_RGBA;
+					format = VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK;
+				}
+			}
+
+			// @todo PowerVR texture compression support needs to be checked via an extension (VK_IMG_FORMAT_PVRTC_EXTENSION_NAME)
+
 			std::vector<basist::ktx2_image_level_info> levelInfos(dec.get_levels());
 
 			const uint32_t levelIndex = 0;
@@ -126,11 +170,18 @@ namespace vkglTF
 			dec.get_image_level_info(levelInfos[0], levelIndex, layerIndex, faceIndex);
 
 			uint32_t bytesPerBlockOrPixel = basist::basis_get_bytes_per_block_or_pixel(targetFormat);
-			uint32_t numBlocksOrPixels = levelInfos[0].m_total_blocks;
-			numBlocksOrPixels = levelInfos[0].m_orig_width * levelInfos[0].m_orig_height;
+			uint32_t numBlocksOrPixels = 0;
+
+			// Size calculations differ for compressed/uncompressed formats
+			if (basist::basis_transcoder_format_is_uncompressed(targetFormat)) {
+				numBlocksOrPixels = levelInfos[0].m_orig_width * levelInfos[0].m_orig_height;
+			}
+			else {
+				numBlocksOrPixels = levelInfos[0].m_total_blocks;
+			}
+
 			uint32_t outputSize = numBlocksOrPixels * bytesPerBlockOrPixel;
 
-			// @todo
 			bufferSize = outputSize;
 			buffer = new unsigned char[bufferSize];
 
@@ -142,6 +193,7 @@ namespace vkglTF
 	
 			width = levelInfos[0].m_orig_width;
 			height = levelInfos[0].m_orig_height;
+			mipLevels = 0;
 
 			delete[] inputData;
 
@@ -170,18 +222,17 @@ namespace vkglTF
 
 			width = gltfimage.width;
 			height = gltfimage.height;
-		}
 
-		// @todo
-		VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+			mipLevels = static_cast<uint32_t>(floor(log2(std::max(width, height))) + 1.0);
+		}
 
 		VkFormatProperties formatProperties;
 
-		mipLevels = static_cast<uint32_t>(floor(log2(std::max(width, height))) + 1.0);
-
-		vkGetPhysicalDeviceFormatProperties(device->physicalDevice, format, &formatProperties);
-		assert(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT);
-		assert(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT);
+		if (mipLevels > 1) {
+			vkGetPhysicalDeviceFormatProperties(device->physicalDevice, format, &formatProperties);
+			assert(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT);
+			assert(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT);
+		}
 
 		VkMemoryAllocateInfo memAllocInfo{};
 		memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
