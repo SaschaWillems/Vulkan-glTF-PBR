@@ -11,6 +11,8 @@ include_directories(external/glm)
 include_directories(external/gli)
 include_directories(external/imgui)
 include_directories(external/tinygltf)
+include_directories(external/basisu/transcoder)
+include_directories(external/basisu/zstd)
 include_directories(base)
 
 OPTION(USE_D2D_WSI "Build the project using Direct to Display swapchain" OFF)
