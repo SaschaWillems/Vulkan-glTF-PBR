@@ -86,7 +86,7 @@ namespace vkglTF
 	{
 		this->device = device;
 
-		// @todo
+		// KTX2 files need to be handled explicitly
 		bool isKtx2 = false;
 		if (gltfimage.uri.find_last_of(".") != std::string::npos) {
 			if (gltfimage.uri.substr(gltfimage.uri.find_last_of(".") + 1) == "ktx2") {
@@ -101,19 +101,25 @@ namespace vkglTF
 		VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
 
 		if (isKtx2) {
-			// @todo: only do once at init, if ext is detected
-			basist::basisu_transcoder_init();
-			basist::ktx2_transcoder dec;
+			// Image is KTX2 using basis universal compression. Those images need to be loaded explicitly and transcoded
+
+			basist::ktx2_transcoder ktxTranscoder;
 			const std::string filename = path + "\\" + gltfimage.uri;
 			std::ifstream ifs(filename, std::ios::binary | std::ios::in | std::ios::ate);
 			if (!ifs.is_open()) {
 				throw std::runtime_error("Could not load the requested image file " + filename);
 			}
-			size_t inputDataSize = ifs.tellg();
-			ifs.seekg(0, std::ios::beg);
+
+			uint32_t inputDataSize = static_cast<uint32_t>(ifs.tellg());
 			char* inputData = new char[inputDataSize];
+
+			ifs.seekg(0, std::ios::beg);
 			ifs.read(inputData, inputDataSize);
-			bool success = dec.init(inputData, inputDataSize);
+			
+			bool success = ktxTranscoder.init(inputData, inputDataSize);
+			if (!success) {
+				throw std::runtime_error("Could not initialize ktx2 transcoder for image file " + filename);
+			}
 
 			// Select target format based on device features (use uncompressed if none supported)
 			auto targetFormat = basist::transcoder_texture_format::cTFRGBA32;
@@ -124,24 +130,20 @@ namespace vkglTF
 				return ((formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_TRANSFER_DST_BIT) && (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT));
 			};
 
-			if (device->features.textureCompressionBC)
-			{
+			if (device->features.textureCompressionBC) {
 				// BC7 is the preferred block compression if available
-				if (formatSupported(VK_FORMAT_BC7_UNORM_BLOCK))
-				{
+				if (formatSupported(VK_FORMAT_BC7_UNORM_BLOCK)) {
 					targetFormat = basist::transcoder_texture_format::cTFBC7_RGBA;
 					format = VK_FORMAT_BC7_UNORM_BLOCK;
 				} else {
-					if (formatSupported(VK_FORMAT_BC3_SRGB_BLOCK))
-					{
+					if (formatSupported(VK_FORMAT_BC3_SRGB_BLOCK)) {
 						targetFormat = basist::transcoder_texture_format::cTFBC3_RGBA;
 						format = VK_FORMAT_BC3_SRGB_BLOCK;
 					}
 				}
 			}
 			// Adaptive scalable texture compression
-			if (device->features.textureCompressionASTC_LDR)
-			{
+			if (device->features.textureCompressionASTC_LDR) {
 				if (formatSupported(VK_FORMAT_ASTC_4x4_SRGB_BLOCK))
 				{
 					targetFormat = basist::transcoder_texture_format::cTFASTC_4x4_RGBA;
@@ -149,8 +151,7 @@ namespace vkglTF
 				}
 			}
 			// Ericsson texture compression
-			if (device->features.textureCompressionETC2)
-			{
+			if (device->features.textureCompressionETC2) {
 				if (formatSupported(VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK))
 				{
 					targetFormat = basist::transcoder_texture_format::cTFETC2_RGBA;
@@ -160,42 +161,31 @@ namespace vkglTF
 
 			// @todo PowerVR texture compression support needs to be checked via an extension (VK_IMG_FORMAT_PVRTC_EXTENSION_NAME)
 
-			std::vector<basist::ktx2_image_level_info> levelInfos(dec.get_levels());
+			const bool targetFormatIsUncompressed = basist::basis_transcoder_format_is_uncompressed(targetFormat);
 
-			const uint32_t levelIndex = 0;
-			const uint32_t layerIndex = 0;
-			const uint32_t faceIndex = 0;
+			std::vector<basist::ktx2_image_level_info> levelInfos(ktxTranscoder.get_levels());
+			mipLevels = ktxTranscoder.get_levels();
 
-			// @todo: load all levels
-			for (auto level = 0; level < dec.get_levels(); level++) {
-				dec.get_image_level_info(levelInfos[level], level, layerIndex, faceIndex);
+			// Query image level information that we need later on for several calculations
+			// We only support 2D images (no cube maps or layered images)
+			for (uint32_t i = 0; i < mipLevels; i++) {
+				ktxTranscoder.get_image_level_info(levelInfos[i], i, 0, 0);
 			}
 
 			width = levelInfos[0].m_orig_width;
 			height = levelInfos[0].m_orig_height;
-			mipLevels = dec.get_levels();
-
-			deleteBuffer = false;
-
-			VkFormatProperties formatProperties;
 
 			VkMemoryAllocateInfo memAllocInfo{};
 			memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 			VkMemoryRequirements memReqs{};
 
 			// Create one staging buffer large enough to hold all uncompressed image levels
-
-			uint32_t bytesPerBlockOrPixel = basist::basis_get_bytes_per_block_or_pixel(targetFormat);
+			const uint32_t bytesPerBlockOrPixel = basist::basis_get_bytes_per_block_or_pixel(targetFormat);
 			uint32_t numBlocksOrPixels = 0;
 			VkDeviceSize totalBufferSize = 0;
 			for (uint32_t i = 0; i < mipLevels; i++) {
 				// Size calculations differ for compressed/uncompressed formats
-				if (basist::basis_transcoder_format_is_uncompressed(targetFormat)) {
-					numBlocksOrPixels = levelInfos[i].m_orig_width * levelInfos[i].m_orig_height;
-				}
-				else {
-					numBlocksOrPixels = levelInfos[i].m_total_blocks;
-				}
+				numBlocksOrPixels = targetFormatIsUncompressed ? levelInfos[i].m_orig_width * levelInfos[i].m_orig_height : levelInfos[i].m_total_blocks;
 				totalBufferSize += numBlocksOrPixels * bytesPerBlockOrPixel;
 			}
 
@@ -218,22 +208,19 @@ namespace vkglTF
 			buffer = new unsigned char[totalBufferSize];
 			unsigned char* bufferPtr = &buffer[0];
 
+			success = ktxTranscoder.start_transcoding();
+			if (!success) {
+				throw std::runtime_error("Could not start transcoding for image file " + filename);
+			}
+
+			// Transcode all mip levels into the staging buffer
 			for (uint32_t i = 0; i < mipLevels; i++) {
 				// Size calculations differ for compressed/uncompressed formats
-				if (basist::basis_transcoder_format_is_uncompressed(targetFormat)) {
-					numBlocksOrPixels = levelInfos[i].m_orig_width * levelInfos[i].m_orig_height;
-				} else {
-					numBlocksOrPixels = levelInfos[i].m_total_blocks;
-				}
+				numBlocksOrPixels = targetFormatIsUncompressed ? levelInfos[i].m_orig_width * levelInfos[i].m_orig_height : levelInfos[i].m_total_blocks;
 				uint32_t outputSize = numBlocksOrPixels * bytesPerBlockOrPixel;
-
-				success = dec.start_transcoding();
-				if (!dec.transcode_image_level(i, layerIndex, faceIndex, bufferPtr, numBlocksOrPixels, targetFormat, 0))
-				{
-					delete[] buffer;
+				if (!ktxTranscoder.transcode_image_level(i, 0, 0, bufferPtr, numBlocksOrPixels, targetFormat, 0)) {
 					throw std::runtime_error("Could not transcode the requested image file " + filename);
 				}
-
 				bufferPtr += outputSize;
 			}
 
@@ -263,7 +250,7 @@ namespace vkglTF
 
 			VkImageSubresourceRange subresourceRange = {};
 			subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			subresourceRange.levelCount = dec.get_levels();
+			subresourceRange.levelCount = mipLevels;
 			subresourceRange.layerCount = 1;
 
 			VkImageMemoryBarrier imageMemoryBarrier{};
@@ -279,13 +266,8 @@ namespace vkglTF
 			// Transcode and copy all image levels
 			VkDeviceSize bufferOffset = 0;
 			for (uint32_t i = 0; i < mipLevels; i++) {
-
 				// Size calculations differ for compressed/uncompressed formats
-				if (basist::basis_transcoder_format_is_uncompressed(targetFormat)) {
-					numBlocksOrPixels = levelInfos[i].m_orig_width * levelInfos[i].m_orig_height;
-				} else {
-					numBlocksOrPixels = levelInfos[i].m_total_blocks;
-				}
+				numBlocksOrPixels = targetFormatIsUncompressed ? levelInfos[i].m_orig_width * levelInfos[i].m_orig_height : levelInfos[i].m_total_blocks;
 				uint32_t outputSize = numBlocksOrPixels * bytesPerBlockOrPixel;
 
 				VkBufferImageCopy bufferCopyRegion = {};
@@ -317,11 +299,13 @@ namespace vkglTF
 			vkFreeMemory(device->logicalDevice, stagingMemory, nullptr);
 			vkDestroyBuffer(device->logicalDevice, stagingBuffer, nullptr);
 
+			delete[] buffer;
 			delete[] inputData;
 		} else {
+			// Image is a basic glTF format like png or jpg and can be loaded directly via tinyglTF
+
 			if (gltfimage.component == 3) {
 				// Most devices don't support RGB only on Vulkan so convert if necessary
-				// TODO: Check actual format support and transform only if required
 				bufferSize = gltfimage.width * gltfimage.height * 4;
 				buffer = new unsigned char[bufferSize];
 				unsigned char* rgba = buffer;
@@ -342,10 +326,12 @@ namespace vkglTF
 
 			width = gltfimage.width;
 			height = gltfimage.height;
-
 			mipLevels = static_cast<uint32_t>(floor(log2(std::max(width, height))) + 1.0);
 
 			VkFormatProperties formatProperties;
+			vkGetPhysicalDeviceFormatProperties(device->physicalDevice, format, &formatProperties);
+			assert(formatProperties.optimalTilingFeatures& VK_FORMAT_FEATURE_BLIT_SRC_BIT);
+			assert(formatProperties.optimalTilingFeatures& VK_FORMAT_FEATURE_BLIT_DST_BIT);
 
 			VkMemoryAllocateInfo memAllocInfo{};
 			memAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -963,11 +949,11 @@ namespace vkglTF
 	{
 		for (tinygltf::Texture &tex : gltfModel.textures) {
 			int source = tex.source;
-			// @todo
+			// If this texture uses the KHR_texture_basisu, we need to get the source index from the extension structure
 			if (tex.extensions.find("KHR_texture_basisu") != tex.extensions.end()) {
 				auto ext = tex.extensions.find("KHR_texture_basisu");
 				auto value = ext->second.Get("source");
-				source = (float)value.Get<int>();
+				source = value.Get<int>();
 			}				
 			tinygltf::Image image = gltfModel.images[source];
 			vkglTF::TextureSampler textureSampler;
@@ -978,8 +964,7 @@ namespace vkglTF
 				textureSampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 				textureSampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 				textureSampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-			}
-			else {
+			} else {
 				textureSampler = textureSamplers[tex.sampler];
 			}
 			vkglTF::Texture texture;
@@ -1284,6 +1269,16 @@ namespace vkglTF
 		size_t indexCount = 0;
 
 		if (fileLoaded) {
+			extensions = gltfModel.extensionsUsed;
+			for (auto& extension : extensions) {
+				// If this model uses basis universal compressed textures, we need to transcode them
+				// So we need to initialize that transcoder once
+				if (extension == "KHR_texture_basisu") {
+					std::cout << "Model uses KHR_texture_basisu, initializing basisu transcoder\n";
+					basist::basisu_transcoder_init();
+				}
+			}
+
 			loadTextureSamplers(gltfModel);
 			loadTextures(gltfModel, device, transferQueue);
 			loadMaterials(gltfModel);
@@ -1323,8 +1318,6 @@ namespace vkglTF
 			std::cerr << "Could not load gltf file: " << error << std::endl;
 			return;
 		}
-
-		extensions = gltfModel.extensionsUsed;
 
 		size_t vertexBufferSize = vertexCount * sizeof(Vertex);
 		size_t indexBufferSize = indexCount * sizeof(uint32_t);

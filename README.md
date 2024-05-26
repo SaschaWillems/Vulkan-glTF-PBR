@@ -32,6 +32,7 @@ Supported extensions:
 * KHR_materials_pbrSpecularGlossiness
 * KHR_materials_unlit
 * KHR_materials_emissive_strength
+* KHR_texture_basisu
 
 ## Loading different scenes
 
