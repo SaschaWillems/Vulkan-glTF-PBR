@@ -25,6 +25,8 @@
 #include <gli/gli.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+#include "basisu_transcoder.h"
+
 // ERROR is already defined in wingdi.h and collides with a define in the Draco headers
 #if defined(_WIN32) && defined(ERROR) && defined(TINYGLTF_ENABLE_DRACO) 
 #undef ERROR
@@ -78,7 +80,7 @@ namespace vkglTF
 		void updateDescriptor();
 		void destroy();
 		// Load a texture from a glTF image (stored as vector of chars loaded via stb_image) and generate a full mip chaing for it
-		void fromglTfImage(tinygltf::Image& gltfimage, TextureSampler textureSampler, vks::VulkanDevice* device, VkQueue copyQueue);
+		void fromglTfImage(tinygltf::Image& gltfimage, std::string path, TextureSampler textureSampler, vks::VulkanDevice* device, VkQueue copyQueue);
 	};
 
 	struct Material {		
@@ -251,6 +253,8 @@ namespace vkglTF
 			size_t indexPos = 0;
 			size_t vertexPos = 0;
 		};
+
+		std::string filePath;
 
 		void destroy(VkDevice device);
 		void loadNode(vkglTF::Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, const tinygltf::Model& model, LoaderInfo& loaderInfo, float globalscale);

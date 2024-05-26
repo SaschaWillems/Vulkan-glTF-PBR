@@ -19,6 +19,19 @@
 
 namespace vkglTF
 {
+	// We use a custom image loading function with tinyglTF, so we can do custom stuff loading ktx textures
+	bool loadImageDataFunc(tinygltf::Image* image, const int imageIndex, std::string* error, std::string* warning, int req_width, int req_height, const unsigned char* bytes, int size, void* userData)
+	{
+		// KTX files will be handled by our own code
+		if (image->uri.find_last_of(".") != std::string::npos) {
+			if (image->uri.substr(image->uri.find_last_of(".") + 1) == "ktx2") {
+				return true;
+			}
+		}
+
+		return tinygltf::LoadImageData(image, imageIndex, error, warning, req_width, req_height, bytes, size, userData);
+	}
+
 	// Bounding box
 
 	BoundingBox::BoundingBox() {
@@ -69,40 +82,101 @@ namespace vkglTF
 		vkDestroySampler(device->logicalDevice, sampler, nullptr);
 	}
 
-	void Texture::fromglTfImage(tinygltf::Image &gltfimage, TextureSampler textureSampler, vks::VulkanDevice *device, VkQueue copyQueue)
+	void Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path, TextureSampler textureSampler, vks::VulkanDevice *device, VkQueue copyQueue)
 	{
 		this->device = device;
+
+		// @todo
+		bool isKtx2 = false;
+		if (gltfimage.uri.find_last_of(".") != std::string::npos) {
+			if (gltfimage.uri.substr(gltfimage.uri.find_last_of(".") + 1) == "ktx2") {
+				isKtx2 = true;
+			}
+		}
 
 		unsigned char* buffer = nullptr;
 		VkDeviceSize bufferSize = 0;
 		bool deleteBuffer = false;
-		if (gltfimage.component == 3) {
-			// Most devices don't support RGB only on Vulkan so convert if necessary
-			// TODO: Check actual format support and transform only if required
-			bufferSize = gltfimage.width * gltfimage.height * 4;
-			buffer = new unsigned char[bufferSize];
-			unsigned char* rgba = buffer;
-			unsigned char* rgb = &gltfimage.image[0];
-			for (int32_t i = 0; i< gltfimage.width * gltfimage.height; ++i) {
-				for (int32_t j = 0; j < 3; ++j) {
-					rgba[j] = rgb[j];
-				}
-				rgba += 4;
-				rgb += 3;
+
+		if (isKtx2) {
+			// @todo: only do once at init, if ext is detected
+			//basist::etc1_global_selector_codebook sel_codebook(basist::g_global_selector_cb_size, basist::g_global_selector_cb);
+			basist::basisu_transcoder_init();
+			basist::ktx2_transcoder dec;
+			const std::string filename = path + "\\" + gltfimage.uri;
+			std::ifstream ifs(filename, std::ios::binary | std::ios::in | std::ios::ate);
+			if (!ifs.is_open()) {
+				throw std::runtime_error("Could not load the requested image file " + filename);
 			}
+			size_t inputDataSize = ifs.tellg();
+			ifs.seekg(0, std::ios::beg);
+			char* inputData = new char[inputDataSize];
+			ifs.read(inputData, inputDataSize);
+			bool success = dec.init(inputData, inputDataSize);
+
+			// @todo: select supported compressed formats instead of uncompressed RGBA
+			auto targetFormat = basist::transcoder_texture_format::cTFRGBA32;
+			std::vector<basist::ktx2_image_level_info> levelInfos(dec.get_levels());
+
+			const uint32_t levelIndex = 0;
+			const uint32_t layerIndex = 0;
+			const uint32_t faceIndex = 0;
+
+			// @todo: load all levels
+			dec.get_image_level_info(levelInfos[0], levelIndex, layerIndex, faceIndex);
+
+			uint32_t bytesPerBlockOrPixel = basist::basis_get_bytes_per_block_or_pixel(targetFormat);
+			uint32_t numBlocksOrPixels = levelInfos[0].m_total_blocks;
+			numBlocksOrPixels = levelInfos[0].m_orig_width * levelInfos[0].m_orig_height;
+			uint32_t outputSize = numBlocksOrPixels * bytesPerBlockOrPixel;
+
+			// @todo
+			bufferSize = outputSize;
+			buffer = new unsigned char[bufferSize];
+
+			success = dec.start_transcoding();
+			if (!dec.transcode_image_level(levelIndex, layerIndex, faceIndex, buffer, numBlocksOrPixels, targetFormat, 0))
+			{
+				throw std::runtime_error("Could not transcode the requested image file " + filename);
+			}
+	
+			width = levelInfos[0].m_orig_width;
+			height = levelInfos[0].m_orig_height;
+
+			delete[] inputData;
+
 			deleteBuffer = true;
-		}
-		else {
-			buffer = &gltfimage.image[0];
-			bufferSize = gltfimage.image.size();
+		} else {
+			if (gltfimage.component == 3) {
+				// Most devices don't support RGB only on Vulkan so convert if necessary
+				// TODO: Check actual format support and transform only if required
+				bufferSize = gltfimage.width * gltfimage.height * 4;
+				buffer = new unsigned char[bufferSize];
+				unsigned char* rgba = buffer;
+				unsigned char* rgb = &gltfimage.image[0];
+				for (int32_t i = 0; i < gltfimage.width * gltfimage.height; ++i) {
+					for (int32_t j = 0; j < 3; ++j) {
+						rgba[j] = rgb[j];
+					}
+					rgba += 4;
+					rgb += 3;
+				}
+				deleteBuffer = true;
+			}
+			else {
+				buffer = &gltfimage.image[0];
+				bufferSize = gltfimage.image.size();
+			}
+
+			width = gltfimage.width;
+			height = gltfimage.height;
 		}
 
+		// @todo
 		VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
 
 		VkFormatProperties formatProperties;
 
-		width = gltfimage.width;
-		height = gltfimage.height;
 		mipLevels = static_cast<uint32_t>(floor(log2(std::max(width, height))) + 1.0);
 
 		vkGetPhysicalDeviceFormatProperties(device->physicalDevice, format, &formatProperties);
@@ -723,7 +797,14 @@ namespace vkglTF
 	void Model::loadTextures(tinygltf::Model &gltfModel, vks::VulkanDevice *device, VkQueue transferQueue)
 	{
 		for (tinygltf::Texture &tex : gltfModel.textures) {
-			tinygltf::Image image = gltfModel.images[tex.source];
+			int source = tex.source;
+			// @todo
+			if (tex.extensions.find("KHR_texture_basisu") != tex.extensions.end()) {
+				auto ext = tex.extensions.find("KHR_texture_basisu");
+				auto value = ext->second.Get("source");
+				source = (float)value.Get<int>();
+			}				
+			tinygltf::Image image = gltfModel.images[source];
 			vkglTF::TextureSampler textureSampler;
 			if (tex.sampler == -1) {
 				// No sampler specified, use a default one
@@ -737,7 +818,7 @@ namespace vkglTF
 				textureSampler = textureSamplers[tex.sampler];
 			}
 			vkglTF::Texture texture;
-			texture.fromglTfImage(image, textureSampler, device, transferQueue);
+			texture.fromglTfImage(image, filePath, textureSampler, device, transferQueue);
 			textures.push_back(texture);
 		}
 	}
@@ -1021,6 +1102,15 @@ namespace vkglTF
 		if (extpos != std::string::npos) {
 			binary = (filename.substr(extpos + 1, filename.length() - extpos) == "glb");
 		}
+
+		size_t pos = filename.find_last_of('/');
+		if (pos == std::string::npos) {
+			pos = filename.find_last_of('\\');
+		}
+		filePath = filename.substr(0, pos);
+
+		// @todo
+		gltfContext.SetImageLoader(loadImageDataFunc, nullptr);
 
 		bool fileLoaded = binary ? gltfContext.LoadBinaryFromFile(&gltfModel, &error, &warning, filename.c_str()) : gltfContext.LoadASCIIFromFile(&gltfModel, &error, &warning, filename.c_str());
 
