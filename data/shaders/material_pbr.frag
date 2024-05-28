@@ -88,7 +88,7 @@ const float M_PI = 3.141592653589793;
 const float c_MinRoughness = 0.04;
 
 const float PBR_WORKFLOW_METALLIC_ROUGHNESS = 0.0;
-const float PBR_WORKFLOW_SPECULAR_GLOSINESS = 1.0f;
+const float PBR_WORKFLOW_SPECULAR_GLOSSINESS = 1.0;
 
 #include "includes/tonemapping.glsl"
 #include "includes/srgbtolinear.glsl"
@@ -239,7 +239,7 @@ void main()
 		}
 	}
 
-	if (material.workflow == PBR_WORKFLOW_SPECULAR_GLOSINESS) {
+	if (material.workflow == PBR_WORKFLOW_SPECULAR_GLOSSINESS) {
 		// Values from specular glossiness workflow are converted to metallic roughness
 		if (material.physicalDescriptorTextureSet > -1) {
 			perceptualRoughness = 1.0 - texture(physicalDescriptorMap, material.physicalDescriptorTextureSet == 0 ? inUV0 : inUV1).a;

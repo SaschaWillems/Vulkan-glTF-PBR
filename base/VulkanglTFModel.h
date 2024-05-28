@@ -79,7 +79,6 @@ namespace vkglTF
 		VkSampler sampler;
 		void updateDescriptor();
 		void destroy();
-		// Load a texture from a glTF image (stored as vector of chars loaded via stb_image) and generate a full mip chaing for it
 		void fromglTfImage(tinygltf::Image& gltfimage, std::string path, TextureSampler textureSampler, vks::VulkanDevice* device, VkQueue copyQueue);
 	};
 
@@ -147,7 +146,7 @@ namespace vkglTF
 		struct UniformBlock {
 			glm::mat4 matrix;
 			glm::mat4 jointMatrix[MAX_NUM_JOINTS]{};
-			float jointcount{ 0 };
+			uint32_t jointcount{ 0 };
 		} uniformBlock;
 		Mesh(vks::VulkanDevice* device, glm::mat4 matrix);
 		~Mesh();
@@ -215,7 +214,7 @@ namespace vkglTF
 			glm::vec3 normal;
 			glm::vec2 uv0;
 			glm::vec2 uv1;
-			glm::vec4 joint0;
+			glm::uvec4 joint0;
 			glm::vec4 weight0;
 			glm::vec4 color;
 		};

@@ -57,10 +57,10 @@ public:
 	};
 
 	struct UBOMatrices {
-		glm::mat4 projection;
-		glm::mat4 model;
-		glm::mat4 view;
-		glm::vec3 camPos;
+		glm::mat4 projection{ 1.0f };
+		glm::mat4 model{ 1.0f };
+		glm::mat4 view{ 1.0f };
+		glm::vec3 camPos{ 0.0f };
 	} shaderValuesScene, shaderValuesSkybox;
 
 	struct shaderValuesParams {
@@ -73,16 +73,16 @@ public:
 		float debugViewEquation = 0;
 	} shaderValuesParams;
 
-	VkPipelineLayout pipelineLayout;
+	VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
 
 	std::unordered_map<std::string, VkPipeline> pipelines;
-	VkPipeline boundPipeline = VK_NULL_HANDLE;
+	VkPipeline boundPipeline{ VK_NULL_HANDLE };
 
 	struct DescriptorSetLayouts {
-		VkDescriptorSetLayout scene;
-		VkDescriptorSetLayout material;
-		VkDescriptorSetLayout node;
-		VkDescriptorSetLayout materialBuffer;
+		VkDescriptorSetLayout scene{ VK_NULL_HANDLE };
+		VkDescriptorSetLayout material{ VK_NULL_HANDLE };
+		VkDescriptorSetLayout node{ VK_NULL_HANDLE };
+		VkDescriptorSetLayout materialBuffer{ VK_NULL_HANDLE };
 	} descriptorSetLayouts;
 
 	struct DescriptorSets {
@@ -109,10 +109,10 @@ public:
 	
 	struct LightSource {
 		glm::vec3 color = glm::vec3(1.0f);
-		glm::vec3 rotation = glm::vec3(75.0f, 40.0f, 0.0f);
+		glm::vec3 rotation = glm::vec3(75.0f, -40.0f, 0.0f);
 	} lightSource;
 
-	UI *ui;
+	UI* ui{ nullptr };
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 	const std::string assetpath = "";
@@ -120,11 +120,7 @@ public:
 	const std::string assetpath = "./../data/";
 #endif
 
-	bool rotateModel = false;
-	glm::vec3 modelrot = glm::vec3(0.0f);
-	glm::vec3 modelPos = glm::vec3(0.0f);
-
-	enum PBRWorkflows{ PBR_WORKFLOW_METALLIC_ROUGHNESS = 0, PBR_WORKFLOW_SPECULAR_GLOSINESS = 1 };
+	enum PBRWorkflows{ PBR_WORKFLOW_METALLIC_ROUGHNESS = 0, PBR_WORKFLOW_SPECULAR_GLOSSINESS = 1 };
 
 	// We use a material buffer to pass material data ind image indices to the shader
 	struct alignas(16) ShaderMaterial {
@@ -145,7 +141,7 @@ public:
 		float emissiveStrength;
 	};
 	Buffer shaderMaterialBuffer;
-	VkDescriptorSet descriptorSetMaterials;
+	VkDescriptorSet descriptorSetMaterials{ VK_NULL_HANDLE };
 
 	std::map<std::string, std::string> environments;
 	std::string selectedEnvironment = "papermill";
@@ -348,7 +344,7 @@ public:
 	}
 
 	// We place all materials for the current scene into a shader storage buffer stored on the GPU
-	// This allows use to use arbitrary large material defintions
+	// This allows us to use arbitrary large material defintions
 	// The fragment shader then get's the index into this material array from a push constant set per primitive
 	void createMaterialBuffer()
 	{
@@ -367,8 +363,6 @@ public:
 			shaderMaterial.alphaMaskCutoff = material.alphaCutoff;
 			shaderMaterial.emissiveStrength = material.emissiveStrength;
 
-			// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
-
 			if (material.pbrWorkflows.metallicRoughness) {
 				// Metallic roughness workflow
 				shaderMaterial.workflow = static_cast<float>(PBR_WORKFLOW_METALLIC_ROUGHNESS);
@@ -377,15 +371,15 @@ public:
 				shaderMaterial.roughnessFactor = material.roughnessFactor;
 				shaderMaterial.PhysicalDescriptorTextureSet = material.metallicRoughnessTexture != nullptr ? material.texCoordSets.metallicRoughness : -1;
 				shaderMaterial.colorTextureSet = material.baseColorTexture != nullptr ? material.texCoordSets.baseColor : -1;
-			}
-
-			if (material.pbrWorkflows.specularGlossiness) {
-				// Specular glossiness workflow
-				shaderMaterial.workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSINESS);
-				shaderMaterial.PhysicalDescriptorTextureSet = material.extension.specularGlossinessTexture != nullptr ? material.texCoordSets.specularGlossiness : -1;
-				shaderMaterial.colorTextureSet = material.extension.diffuseTexture != nullptr ? material.texCoordSets.baseColor : -1;
-				shaderMaterial.diffuseFactor = material.extension.diffuseFactor;
-				shaderMaterial.specularFactor = glm::vec4(material.extension.specularFactor, 1.0f);
+			} else {
+				if (material.pbrWorkflows.specularGlossiness) {
+					// Specular glossiness workflow
+					shaderMaterial.workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSSINESS);
+					shaderMaterial.PhysicalDescriptorTextureSet = material.extension.specularGlossinessTexture != nullptr ? material.texCoordSets.specularGlossiness : -1;
+					shaderMaterial.colorTextureSet = material.extension.diffuseTexture != nullptr ? material.texCoordSets.baseColor : -1;
+					shaderMaterial.diffuseFactor = material.extension.diffuseFactor;
+					shaderMaterial.specularFactor = glm::vec4(material.extension.specularFactor, 1.0f);
+				}
 			}
 
 			shaderMaterials.push_back(shaderMaterial);
@@ -649,8 +643,6 @@ public:
 					material.emissiveTexture ? material.emissiveTexture->descriptor : textures.empty.descriptor
 				};
 
-				// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
-
 				if (material.pbrWorkflows.metallicRoughness) {
 					if (material.baseColorTexture) {
 						imageDescriptors[0] = material.baseColorTexture->descriptor;
@@ -658,14 +650,14 @@ public:
 					if (material.metallicRoughnessTexture) {
 						imageDescriptors[1] = material.metallicRoughnessTexture->descriptor;
 					}
-				}
-
-				if (material.pbrWorkflows.specularGlossiness) {
-					if (material.extension.diffuseTexture) {
-						imageDescriptors[0] = material.extension.diffuseTexture->descriptor;
-					}
-					if (material.extension.specularGlossinessTexture) {
-						imageDescriptors[1] = material.extension.specularGlossinessTexture->descriptor;
+				} else {
+					if (material.pbrWorkflows.specularGlossiness) {
+						if (material.extension.diffuseTexture) {
+							imageDescriptors[0] = material.extension.diffuseTexture->descriptor;
+						}
+						if (material.extension.specularGlossinessTexture) {
+							imageDescriptors[1] = material.extension.specularGlossinessTexture->descriptor;
+						}
 					}
 				}
 
@@ -832,17 +824,18 @@ public:
 		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
 
-		// Vertex bindings an attributes
+		// Vertex bindings and attributes
 		VkVertexInputBindingDescription vertexInputBinding = { 0, sizeof(vkglTF::Model::Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
 		std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
-			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
-			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 },
-			{ 2, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 6 },
-			{ 3, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 8 },
-			{ 4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 10 },
-			{ 5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 14 },
-			{ 6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 18 }
+			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(vkglTF::Model::Vertex, pos)},
+			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(vkglTF::Model::Vertex, normal) },
+			{ 2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(vkglTF::Model::Vertex, uv0) },
+			{ 3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(vkglTF::Model::Vertex, uv1) },
+			{ 4, 0, VK_FORMAT_R32G32B32A32_UINT, offsetof(vkglTF::Model::Vertex, joint0) },
+			{ 5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vkglTF::Model::Vertex, weight0) },
+			{ 6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vkglTF::Model::Vertex, color) }
 		};
+
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCI{};
 		vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertexInputStateCI.vertexBindingDescriptionCount = 1;
@@ -2071,12 +2064,6 @@ public:
 		currentFrame %= renderAhead;
 
 		if (!paused) {
-			if (rotateModel) {
-				modelrot.y += frameTimer * 35.0f;
-				if (modelrot.y > 360.0f) {
-					modelrot.y -= 360.0f;
-				}
-			}
 			if ((animate) && (models.scene.animations.size() > 0)) {
 				animationTimer += frameTimer;
 				if (animationTimer > models.scene.animations[animationIndex].end) {
@@ -2085,9 +2072,6 @@ public:
 				models.scene.updateAnimation(animationIndex, animationTimer);
 			}
 			updateParams();
-			if (rotateModel) {
-				updateUniformBuffers();
-			}
 		}
 		if (camera.updated) {
 			updateUniformBuffers();

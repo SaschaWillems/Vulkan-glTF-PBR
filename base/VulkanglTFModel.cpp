@@ -82,6 +82,7 @@ namespace vkglTF
 		vkDestroySampler(device->logicalDevice, sampler, nullptr);
 	}
 
+	// Loads the image for this texture. Supports both glTF's web formats (jpg, png, embedded and external files) as well as external KTX2 files with basis universal texture compression
 	void Texture::fromglTfImage(tinygltf::Image &gltfimage, std::string path, TextureSampler textureSampler, vks::VulkanDevice *device, VkQueue copyQueue)
 	{
 		this->device = device;
@@ -94,14 +95,10 @@ namespace vkglTF
 			}
 		}
 
-		unsigned char* buffer = nullptr;
-		VkDeviceSize bufferSize = 0;
-		bool deleteBuffer = false;
-
 		VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
 
 		if (isKtx2) {
-			// Image is KTX2 using basis universal compression. Those images need to be loaded explicitly and transcoded
+			// Image is KTX2 using basis universal compression. Those images need to be loaded from disk and will be transcoded to a native GPU format
 
 			basist::ktx2_transcoder ktxTranscoder;
 			const std::string filename = path + "\\" + gltfimage.uri;
@@ -205,7 +202,7 @@ namespace vkglTF
 			uint8_t* stagingBufferMapped;
 			VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, stagingMemory, 0, memReqs.size, 0, (void**)&stagingBufferMapped));
 
-			buffer = new unsigned char[totalBufferSize];
+			unsigned char* buffer = new unsigned char[totalBufferSize];
 			unsigned char* bufferPtr = &buffer[0];
 
 			success = ktxTranscoder.start_transcoding();
@@ -295,7 +292,6 @@ namespace vkglTF
 
 			device->flushCommandBuffer(copyCmd, copyQueue, true);
 
-			vkUnmapMemory(device->logicalDevice, stagingMemory);
 			vkFreeMemory(device->logicalDevice, stagingMemory, nullptr);
 			vkDestroyBuffer(device->logicalDevice, stagingBuffer, nullptr);
 
@@ -303,6 +299,9 @@ namespace vkglTF
 			delete[] inputData;
 		} else {
 			// Image is a basic glTF format like png or jpg and can be loaded directly via tinyglTF
+			unsigned char* buffer = nullptr;
+			VkDeviceSize bufferSize = 0;
+			bool deleteBuffer = false;
 
 			if (gltfimage.component == 3) {
 				// Most devices don't support RGB only on Vulkan so convert if necessary
@@ -356,6 +355,10 @@ namespace vkglTF
 			VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, stagingMemory, 0, memReqs.size, 0, (void**)&data));
 			memcpy(data, buffer, bufferSize);
 			vkUnmapMemory(device->logicalDevice, stagingMemory);
+
+			if (deleteBuffer) {
+				delete[] buffer;
+			}
 
 			VkImageCreateInfo imageCreateInfo{};
 			imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -525,10 +528,6 @@ namespace vkglTF
 		descriptor.sampler = sampler;
 		descriptor.imageView = view;
 		descriptor.imageLayout = imageLayout;
-
-		if (deleteBuffer)
-			delete[] buffer;
-
 	}
 
 	// Primitive
@@ -610,7 +609,7 @@ namespace vkglTF
 					jointMat = inverseTransform * jointMat;
 					mesh->uniformBlock.jointMatrix[i] = jointMat;
 				}
-				mesh->uniformBlock.jointcount = (float)numJoints;
+				mesh->uniformBlock.jointcount = static_cast<uint32_t>(numJoints);
 				memcpy(mesh->uniformBuffer.mapped, &mesh->uniformBlock, sizeof(mesh->uniformBlock));
 			} else {
 				memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
@@ -806,7 +805,7 @@ namespace vkglTF
 							switch (jointComponentType) {
 							case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
 								const uint16_t *buf = static_cast<const uint16_t*>(bufferJoints);
-								vert.joint0 = glm::vec4(glm::make_vec4(&buf[v * jointByteStride]));
+								vert.joint0 = glm::uvec4(glm::make_vec4(&buf[v * jointByteStride]));
 								break;
 							}
 							case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
@@ -1076,7 +1075,6 @@ namespace vkglTF
 			}
 
 			// Extensions
-			// @TODO: Find out if there is a nicer way of reading these properties with recent tinygltf headers
 			if (mat.extensions.find("KHR_materials_pbrSpecularGlossiness") != mat.extensions.end()) {
 				auto ext = mat.extensions.find("KHR_materials_pbrSpecularGlossiness");
 				if (ext->second.Has("specularGlossinessTexture")) {
@@ -1085,6 +1083,7 @@ namespace vkglTF
 					auto texCoordSet = ext->second.Get("specularGlossinessTexture").Get("texCoord");
 					material.texCoordSets.specularGlossiness = texCoordSet.Get<int>();
 					material.pbrWorkflows.specularGlossiness = true;
+					material.pbrWorkflows.metallicRoughness = false;
 				}
 				if (ext->second.Has("diffuseTexture")) {
 					auto index = ext->second.Get("diffuseTexture").Get("index");
