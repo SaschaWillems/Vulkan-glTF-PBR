@@ -609,7 +609,7 @@ namespace vkglTF
 					jointMat = inverseTransform * jointMat;
 					mesh->uniformBlock.jointMatrix[i] = jointMat;
 				}
-				mesh->uniformBlock.jointcount = numJoints;
+				mesh->uniformBlock.jointcount = static_cast<uint32_t>(numJoints);
 				memcpy(mesh->uniformBuffer.mapped, &mesh->uniformBlock, sizeof(mesh->uniformBlock));
 			} else {
 				memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
@@ -1075,7 +1075,6 @@ namespace vkglTF
 			}
 
 			// Extensions
-			// @TODO: Find out if there is a nicer way of reading these properties with recent tinygltf headers
 			if (mat.extensions.find("KHR_materials_pbrSpecularGlossiness") != mat.extensions.end()) {
 				auto ext = mat.extensions.find("KHR_materials_pbrSpecularGlossiness");
 				if (ext->second.Has("specularGlossinessTexture")) {
@@ -1084,6 +1083,7 @@ namespace vkglTF
 					auto texCoordSet = ext->second.Get("specularGlossinessTexture").Get("texCoord");
 					material.texCoordSets.specularGlossiness = texCoordSet.Get<int>();
 					material.pbrWorkflows.specularGlossiness = true;
+					material.pbrWorkflows.metallicRoughness = false;
 				}
 				if (ext->second.Has("diffuseTexture")) {
 					auto index = ext->second.Get("diffuseTexture").Get("index");

@@ -109,7 +109,7 @@ public:
 	
 	struct LightSource {
 		glm::vec3 color = glm::vec3(1.0f);
-		glm::vec3 rotation = glm::vec3(75.0f, 40.0f, 0.0f);
+		glm::vec3 rotation = glm::vec3(75.0f, -40.0f, 0.0f);
 	} lightSource;
 
 	UI* ui{ nullptr };
@@ -120,7 +120,7 @@ public:
 	const std::string assetpath = "./../data/";
 #endif
 
-	enum PBRWorkflows{ PBR_WORKFLOW_METALLIC_ROUGHNESS = 0, PBR_WORKFLOW_SPECULAR_GLOSINESS = 1 };
+	enum PBRWorkflows{ PBR_WORKFLOW_METALLIC_ROUGHNESS = 0, PBR_WORKFLOW_SPECULAR_GLOSSINESS = 1 };
 
 	// We use a material buffer to pass material data ind image indices to the shader
 	struct alignas(16) ShaderMaterial {
@@ -344,7 +344,7 @@ public:
 	}
 
 	// We place all materials for the current scene into a shader storage buffer stored on the GPU
-	// This allows use to use arbitrary large material defintions
+	// This allows us to use arbitrary large material defintions
 	// The fragment shader then get's the index into this material array from a push constant set per primitive
 	void createMaterialBuffer()
 	{
@@ -363,8 +363,6 @@ public:
 			shaderMaterial.alphaMaskCutoff = material.alphaCutoff;
 			shaderMaterial.emissiveStrength = material.emissiveStrength;
 
-			// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
-
 			if (material.pbrWorkflows.metallicRoughness) {
 				// Metallic roughness workflow
 				shaderMaterial.workflow = static_cast<float>(PBR_WORKFLOW_METALLIC_ROUGHNESS);
@@ -373,15 +371,15 @@ public:
 				shaderMaterial.roughnessFactor = material.roughnessFactor;
 				shaderMaterial.PhysicalDescriptorTextureSet = material.metallicRoughnessTexture != nullptr ? material.texCoordSets.metallicRoughness : -1;
 				shaderMaterial.colorTextureSet = material.baseColorTexture != nullptr ? material.texCoordSets.baseColor : -1;
-			}
-
-			if (material.pbrWorkflows.specularGlossiness) {
-				// Specular glossiness workflow
-				shaderMaterial.workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSINESS);
-				shaderMaterial.PhysicalDescriptorTextureSet = material.extension.specularGlossinessTexture != nullptr ? material.texCoordSets.specularGlossiness : -1;
-				shaderMaterial.colorTextureSet = material.extension.diffuseTexture != nullptr ? material.texCoordSets.baseColor : -1;
-				shaderMaterial.diffuseFactor = material.extension.diffuseFactor;
-				shaderMaterial.specularFactor = glm::vec4(material.extension.specularFactor, 1.0f);
+			} else {
+				if (material.pbrWorkflows.specularGlossiness) {
+					// Specular glossiness workflow
+					shaderMaterial.workflow = static_cast<float>(PBR_WORKFLOW_SPECULAR_GLOSSINESS);
+					shaderMaterial.PhysicalDescriptorTextureSet = material.extension.specularGlossinessTexture != nullptr ? material.texCoordSets.specularGlossiness : -1;
+					shaderMaterial.colorTextureSet = material.extension.diffuseTexture != nullptr ? material.texCoordSets.baseColor : -1;
+					shaderMaterial.diffuseFactor = material.extension.diffuseFactor;
+					shaderMaterial.specularFactor = glm::vec4(material.extension.specularFactor, 1.0f);
+				}
 			}
 
 			shaderMaterials.push_back(shaderMaterial);
@@ -645,8 +643,6 @@ public:
 					material.emissiveTexture ? material.emissiveTexture->descriptor : textures.empty.descriptor
 				};
 
-				// TODO: glTF specs states that metallic roughness should be preferred, even if specular glosiness is present
-
 				if (material.pbrWorkflows.metallicRoughness) {
 					if (material.baseColorTexture) {
 						imageDescriptors[0] = material.baseColorTexture->descriptor;
@@ -654,14 +650,14 @@ public:
 					if (material.metallicRoughnessTexture) {
 						imageDescriptors[1] = material.metallicRoughnessTexture->descriptor;
 					}
-				}
-
-				if (material.pbrWorkflows.specularGlossiness) {
-					if (material.extension.diffuseTexture) {
-						imageDescriptors[0] = material.extension.diffuseTexture->descriptor;
-					}
-					if (material.extension.specularGlossinessTexture) {
-						imageDescriptors[1] = material.extension.specularGlossinessTexture->descriptor;
+				} else {
+					if (material.pbrWorkflows.specularGlossiness) {
+						if (material.extension.diffuseTexture) {
+							imageDescriptors[0] = material.extension.diffuseTexture->descriptor;
+						}
+						if (material.extension.specularGlossinessTexture) {
+							imageDescriptors[1] = material.extension.specularGlossinessTexture->descriptor;
+						}
 					}
 				}
 
