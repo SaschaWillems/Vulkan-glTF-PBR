@@ -609,7 +609,7 @@ namespace vkglTF
 					jointMat = inverseTransform * jointMat;
 					mesh->uniformBlock.jointMatrix[i] = jointMat;
 				}
-				mesh->uniformBlock.jointcount = (float)numJoints;
+				mesh->uniformBlock.jointcount = numJoints;
 				memcpy(mesh->uniformBuffer.mapped, &mesh->uniformBlock, sizeof(mesh->uniformBlock));
 			} else {
 				memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
@@ -805,7 +805,7 @@ namespace vkglTF
 							switch (jointComponentType) {
 							case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
 								const uint16_t *buf = static_cast<const uint16_t*>(bufferJoints);
-								vert.joint0 = glm::vec4(glm::make_vec4(&buf[v * jointByteStride]));
+								vert.joint0 = glm::uvec4(glm::make_vec4(&buf[v * jointByteStride]));
 								break;
 							}
 							case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {

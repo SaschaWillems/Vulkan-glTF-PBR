@@ -57,10 +57,10 @@ public:
 	};
 
 	struct UBOMatrices {
-		glm::mat4 projection;
-		glm::mat4 model;
-		glm::mat4 view;
-		glm::vec3 camPos;
+		glm::mat4 projection{ 1.0f };
+		glm::mat4 model{ 1.0f };
+		glm::mat4 view{ 1.0f };
+		glm::vec3 camPos{ 0.0f };
 	} shaderValuesScene, shaderValuesSkybox;
 
 	struct shaderValuesParams {
@@ -73,16 +73,16 @@ public:
 		float debugViewEquation = 0;
 	} shaderValuesParams;
 
-	VkPipelineLayout pipelineLayout;
+	VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
 
 	std::unordered_map<std::string, VkPipeline> pipelines;
-	VkPipeline boundPipeline = VK_NULL_HANDLE;
+	VkPipeline boundPipeline{ VK_NULL_HANDLE };
 
 	struct DescriptorSetLayouts {
-		VkDescriptorSetLayout scene;
-		VkDescriptorSetLayout material;
-		VkDescriptorSetLayout node;
-		VkDescriptorSetLayout materialBuffer;
+		VkDescriptorSetLayout scene{ VK_NULL_HANDLE };
+		VkDescriptorSetLayout material{ VK_NULL_HANDLE };
+		VkDescriptorSetLayout node{ VK_NULL_HANDLE };
+		VkDescriptorSetLayout materialBuffer{ VK_NULL_HANDLE };
 	} descriptorSetLayouts;
 
 	struct DescriptorSets {
@@ -112,17 +112,13 @@ public:
 		glm::vec3 rotation = glm::vec3(75.0f, 40.0f, 0.0f);
 	} lightSource;
 
-	UI *ui;
+	UI* ui{ nullptr };
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
 	const std::string assetpath = "";
 #else
 	const std::string assetpath = "./../data/";
 #endif
-
-	bool rotateModel = false;
-	glm::vec3 modelrot = glm::vec3(0.0f);
-	glm::vec3 modelPos = glm::vec3(0.0f);
 
 	enum PBRWorkflows{ PBR_WORKFLOW_METALLIC_ROUGHNESS = 0, PBR_WORKFLOW_SPECULAR_GLOSINESS = 1 };
 
@@ -145,7 +141,7 @@ public:
 		float emissiveStrength;
 	};
 	Buffer shaderMaterialBuffer;
-	VkDescriptorSet descriptorSetMaterials;
+	VkDescriptorSet descriptorSetMaterials{ VK_NULL_HANDLE };
 
 	std::map<std::string, std::string> environments;
 	std::string selectedEnvironment = "papermill";
@@ -832,17 +828,18 @@ public:
 		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
 
-		// Vertex bindings an attributes
+		// Vertex bindings and attributes
 		VkVertexInputBindingDescription vertexInputBinding = { 0, sizeof(vkglTF::Model::Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
 		std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
-			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
-			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 },
-			{ 2, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 6 },
-			{ 3, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 8 },
-			{ 4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 10 },
-			{ 5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 14 },
-			{ 6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float) * 18 }
+			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(vkglTF::Model::Vertex, pos)},
+			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(vkglTF::Model::Vertex, normal) },
+			{ 2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(vkglTF::Model::Vertex, uv0) },
+			{ 3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(vkglTF::Model::Vertex, uv1) },
+			{ 4, 0, VK_FORMAT_R32G32B32A32_UINT, offsetof(vkglTF::Model::Vertex, joint0) },
+			{ 5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vkglTF::Model::Vertex, weight0) },
+			{ 6, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vkglTF::Model::Vertex, color) }
 		};
+
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCI{};
 		vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertexInputStateCI.vertexBindingDescriptionCount = 1;
@@ -2071,12 +2068,6 @@ public:
 		currentFrame %= renderAhead;
 
 		if (!paused) {
-			if (rotateModel) {
-				modelrot.y += frameTimer * 35.0f;
-				if (modelrot.y > 360.0f) {
-					modelrot.y -= 360.0f;
-				}
-			}
 			if ((animate) && (models.scene.animations.size() > 0)) {
 				animationTimer += frameTimer;
 				if (animationTimer > models.scene.animations[animationIndex].end) {
@@ -2085,9 +2076,6 @@ public:
 				models.scene.updateAnimation(animationIndex, animationTimer);
 			}
 			updateParams();
-			if (rotateModel) {
-				updateUniformBuffers();
-			}
 		}
 		if (camera.updated) {
 			updateUniformBuffers();

@@ -146,7 +146,7 @@ namespace vkglTF
 		struct UniformBlock {
 			glm::mat4 matrix;
 			glm::mat4 jointMatrix[MAX_NUM_JOINTS]{};
-			float jointcount{ 0 };
+			uint32_t jointcount{ 0 };
 		} uniformBlock;
 		Mesh(vks::VulkanDevice* device, glm::mat4 matrix);
 		~Mesh();
@@ -214,7 +214,7 @@ namespace vkglTF
 			glm::vec3 normal;
 			glm::vec2 uv0;
 			glm::vec2 uv1;
-			glm::vec4 joint0;
+			glm::uvec4 joint0;
 			glm::vec4 weight0;
 			glm::vec4 color;
 		};
