@@ -143,5 +143,5 @@ In order to enable support for loading Draco compressed glTF files you need to:
 
 ## Links
 * [glTF format specification](https://github.com/KhronosGroup/glTF)
-* [glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models)
+* [glTF V2.0 Sample Models](https://github.com/KhronosGroup/glTF-Sample-Assets)
 * [tiny glTF library](https://github.com/syoyo/tinygltf)
