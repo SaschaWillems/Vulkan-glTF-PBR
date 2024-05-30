@@ -195,6 +195,11 @@ namespace vkglTF
 		InterpolationType interpolation;
 		std::vector<float> inputs;
 		std::vector<glm::vec4> outputsVec4;
+		std::vector<float> outputs;
+		glm::vec4 cubicSplineInterpolation(size_t index, float time, uint32_t stride);
+		void translate(size_t index, float time, vkglTF::Node* node);
+		void scale(size_t index, float time, vkglTF::Node* node);
+		void rotate(size_t index, float time, vkglTF::Node* node);
 	};
 
 	struct Animation {
