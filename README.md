@@ -100,7 +100,7 @@ git submodule update
 
 ## Building
 
-The repository contains everything required to compile and build the examples on **Windows**, **Linux** and **Android** using a C++ compiler that supports C++11. All required dependencies are included.
+The repository contains everything required to compile and build the examples on **Windows**, **Linux** and **Android** using a C++ compiler that supports C++14. All required dependencies are included.
 
 ### Windows, Linux
 
