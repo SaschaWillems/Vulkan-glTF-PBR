@@ -154,6 +154,15 @@ public:
 	int32_t debugViewInputs = 0;
 	int32_t debugViewEquation = 0;
 
+	// List of glTF extensions supported by this application
+	// Models with un-supported extensions may not work/look as expected
+	const std::vector<std::string> supportedExtensions = {
+		"KHR_texture_basisu",
+		"KHR_materials_pbrSpecularGlossiness",
+		"KHR_materials_unlit",
+		"KHR_materials_emissive_strength"
+	};
+
 	VulkanApplication() : VulkanExampleBase()
 	{
 		title = "Vulkan glTF 2.0 PBR - (C) Sascha Willems (www.saschawillems.de)";
@@ -420,6 +429,12 @@ public:
 		createMaterialBuffer();
 		auto tFileLoad = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - tStart).count();
 		std::cout << "Loading took " << tFileLoad << " ms" << std::endl;
+		// Check and list unsupported extensions
+		for (auto& ext : models.scene.extensions) {
+			if (std::find(supportedExtensions.begin(), supportedExtensions.end(), ext) == supportedExtensions.end()) {
+				std::cout << "[WARN] Unsupported extension " << ext << " detected. Scene may not work or display as intended\n";
+			}
+		}
 		resetCamera();
 	}
 
