@@ -8,6 +8,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DVK_USE_PLATFORM_ANDROID_KHR
 
 file(GLOB BASE_SRC "${SRC_DIR}/main.cpp" "${EXTERNAL_DIR}/imgui/*.cpp")
 
+# Basis Universal
+set(BASISU_DIR ${EXTERNAL_DIR}/basisu)
+
+set(BASISU_SOURCES
+        ${BASISU_DIR}/transcoder/basisu_transcoder.cpp
+        ${BASISU_DIR}/zstd/zstd.c)
+
 add_library(
     native-lib SHARED
     ${BASE_SRC}
@@ -17,6 +24,8 @@ add_library(
     ${BASE_DIR}/VulkanTexture.hpp
     ${BASE_DIR}/VulkanglTFModel.cpp
     ${EXTERNAL_DIR}/imgui/imgui_draw.cpp
+
+    ${BASISU_SOURCES}
 )
 
 add_library(native-app-glue STATIC ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c)
@@ -28,6 +37,8 @@ include_directories(${EXTERNAL_DIR})
 include_directories(${EXTERNAL_DIR}/glm)
 include_directories(${EXTERNAL_DIR}/gli)
 include_directories(${EXTERNAL_DIR}/tinygltf)
+include_directories(${EXTERNAL_DIR}/basisu/transcoder)
+include_directories(${EXTERNAL_DIR}/basisu/zstd)
 include_directories(${ANDROID_NDK}/sources/android/native_app_glue)
 
 target_link_libraries(
