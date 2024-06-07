@@ -1677,10 +1677,22 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	}
 }
 
-- (void)mouseDown:(NSEvent *)event
+// RG:
+- (NSPoint)getMouseLocalPoint:(NSEvent*)event
 {
 	NSPoint location = [event locationInWindow];
 	NSPoint point = [self convertPoint:location fromView:nil];
+	point.y = self.frame.size.height - point.y;
+	return point;
+}
+
+
+- (void)mouseDown:(NSEvent *)event
+{
+	NSPoint location = [event locationInWindow];
+	//NSPoint point = [self convertPoint:location fromView:nil];
+	// RG:
+	auto point = [self getMouseLocalPoint:event];
 	vulkanExampleBase->mousePos = glm::vec2(point.x, point.y);
 	vulkanExampleBase->mouseButtons.left = true;
 }
@@ -1688,7 +1700,9 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 - (void)mouseUp:(NSEvent *)event
 {
 	NSPoint location = [event locationInWindow];
-	NSPoint point = [self convertPoint:location fromView:nil];
+	//NSPoint point = [self convertPoint:location fromView:nil];
+	// RG:
+	auto point = [self getMouseLocalPoint:event];
 	vulkanExampleBase->mousePos = glm::vec2(point.x, point.y);
 	vulkanExampleBase->mouseButtons.left = false;
 }
@@ -1706,14 +1720,18 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 - (void)mouseDragged:(NSEvent *)event
 {
 	NSPoint location = [event locationInWindow];
-	NSPoint point = [self convertPoint:location fromView:nil];
+	//NSPoint point = [self convertPoint:location fromView:nil];
+	// RG:
+	auto point = [self getMouseLocalPoint:event];
 	vulkanExampleBase->mouseDragged(point.x, point.y);
 }
 
 - (void)mouseMoved:(NSEvent *)event
 {
 	NSPoint location = [event locationInWindow];
-	NSPoint point = [self convertPoint:location fromView:nil];
+	//NSPoint point = [self convertPoint:location fromView:nil];
+	// RG:
+	auto point = [self getMouseLocalPoint:event];
 	vulkanExampleBase->mouseDragged(point.x, point.y);
 }
 
@@ -2011,7 +2029,12 @@ void VulkanExampleBase::windowResize()
 
 void VulkanExampleBase::handleMouseMove(int32_t x, int32_t y)
 {
+	// RG:
+	//std::cout << y << std::endl;
+	
+
 	int32_t dx = (int32_t)mousePos.x - x;
+	
 	int32_t dy = (int32_t)mousePos.y - y;
 
 	ImGuiIO& io = ImGui::GetIO();
@@ -2022,10 +2045,11 @@ void VulkanExampleBase::handleMouseMove(int32_t x, int32_t y)
 		return;
 	}
 
-	if (handled) {
-		mousePos = glm::vec2((float)x, (float)y);
-		return;
-	}
+	// RG: redundant
+	// if (handled) {
+	// 	mousePos = glm::vec2((float)x, (float)y);
+	// 	return;
+	// }
 
 	if (mouseButtons.left) {
 		camera.rotate(glm::vec3(dy * camera.rotationSpeed, -dx * camera.rotationSpeed, 0.0f));

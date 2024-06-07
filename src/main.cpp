@@ -1840,6 +1840,7 @@ public:
 		setupDescriptors();
 		preparePipelines();
 
+		// RG:
 		ui = new UI(vulkanDevice, renderPass, queue, pipelineCache, settings.sampleCount);
 		updateOverlay();
 
@@ -1856,6 +1857,11 @@ public:
 		ImVec2 lastDisplaySize = io.DisplaySize;
 		io.DisplaySize = ImVec2((float)width, (float)height);
 		io.DeltaTime = frameTimer;
+
+		// RG:
+		//int y = mousePos.y;
+		//y = y - height;
+		//y = -y;
 
 		io.MousePos = ImVec2(mousePos.x, mousePos.y);
 		io.MouseDown[0] = mouseButtons.left;
@@ -1874,6 +1880,7 @@ public:
 		ImGui::SetNextWindowPos(ImVec2(10, 10));
 		ImGui::SetNextWindowSize(ImVec2(200 * scale, (models.scene.animations.size() > 0 ? 500 : 420) * scale), ImGuiSetCond_Always);
 		ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+		//ImGui::Begin("Vulkan glTF 2.0 PBR", nullptr, 0);
 		ImGui::PushItemWidth(100.0f * scale);
 
 		ui->text("www.saschawillems.de");
@@ -2026,11 +2033,12 @@ public:
 			return;
 		}
 
-		ui->updateTimer -= frameTimer;
-		if (ui->updateTimer <= 0.0f) {
-			updateOverlay();
-			ui->updateTimer = 1.0f / 60.0f;
-		}
+		// RG:
+		// ui->updateTimer -= frameTimer;
+		// if (ui->updateTimer <= 0.0f) {
+		 	updateOverlay();
+		// 	ui->updateTimer = 1.0f / 60.0f;
+		// }
 
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX));
 		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));
