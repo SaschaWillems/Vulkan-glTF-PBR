@@ -5,11 +5,11 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/opt/homebrew/include/",
-                "/Users/rg/rcsim2/Vulkan/base",
-                "/Users/rg/rcsim2/Vulkan/external",
-                "/Users/rg/rcsim2/Vulkan/external/glm",
-                "/Users/rg/rcsim2/Vulkan/external/imgui",
-                "/Users/rg/rcsim2/Vulkan/external/tinygltf",
+                "/Users/rg/rcsim2/Vulkan-glTF-PBR/base",
+                "/Users/rg/rcsim2/Vulkan-glTF-PBR/external",
+                "/Users/rg/rcsim2/Vulkan-glTF-PBR/external/glm",
+                "/Users/rg/rcsim2/Vulkan-glTF-PBR/external/imgui",
+                "/Users/rg/rcsim2/Vulkan-glTF-PBR/external/tinygltf",
                 "/Users/rg/rcsim2/Vulkan/external/ktx/include",
                 "/Users/rg/rcsim2/Vulkan/external/ktx/other_include"
             ],

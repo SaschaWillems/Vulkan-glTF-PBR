@@ -17,14 +17,15 @@
                 "-DVK_USE_PLATFORM_METAL_EXT",
                 "-DVK_EXAMPLE_SHADERS_DIR=\"/Users/rg/rcsim2/Vulkan/shaders/\"",
                 "-DVK_EXAMPLE_ASSETS_DIR=\"/Users/rg/rcsim2/Vulkan/assets/\"",
-                "-I/Users/rg/rcsim2/Vulkan/external",
-                "-I/Users/rg/rcsim2/Vulkan/external/glm",
-                "-I/Users/rg/rcsim2/Vulkan/external/gli",
-                "-I/Users/rg/rcsim2/Vulkan/external/imgui",
-                "-I/Users/rg/rcsim2/Vulkan/external/tinygltf",
-                "-I/Users/rg/rcsim2/Vulkan/external/ktx/include",
+                "-I/Users/rg/rcsim2/Vulkan-glTF-PBR/external",
+                "-I/Users/rg/rcsim2/Vulkan-glTF-PBR/external/glm",
+                "-I/Users/rg/rcsim2/Vulkan-glTF-PBR/external/gli",
+                "-I/Users/rg/rcsim2/Vulkan-glTF-PBR/external/imgui",
+                "-I/Users/rg/rcsim2/Vulkan-glTF-PBR/external/tinygltf",
+                "-I/Users/rg/rcsim2/Vulkan-glTF-PBR/external/ktx/include",
                 "-I/Users/rg/rcsim2/Vulkan/external/ktx/other_include",
-                "-I/Users/rg/rcsim2/Vulkan/base",
+                "-I/Users/rg/rcsim2/Vulkan-glTF-PBR/base",
+                "-I/Users/rg/rcsim2/Vulkan-glTF-PBR/external/basisu/transcoder",
                 "-I/opt/homebrew/include/",
                 "-DNOMINMAX",
                 "-D_USE_MATH_DEFINES",
@@ -45,7 +46,7 @@
                 "AppKit",
                 "-framework",
                 "QuartzCore",
-                "/Users/rg/rcsim2/Vulkan/base/libbase.a"
+                "/Users/rg/rcsim2/Vulkan-glTF-PBR/base/libbase.a"
             ],
             "options": {
                 "cwd": "${fileDirname}"
