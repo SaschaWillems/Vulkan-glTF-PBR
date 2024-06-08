@@ -2031,7 +2031,7 @@ public:
 			return;
 		}
 
-		// RG:
+		// RG: this also caused ingui not to work properly on macos
 		// ui->updateTimer -= frameTimer;
 		// if (ui->updateTimer <= 0.0f) {
 		 	updateOverlay();

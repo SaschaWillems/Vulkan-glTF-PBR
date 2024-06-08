@@ -1584,6 +1584,12 @@ void VulkanExampleBase::handleEvent(const xcb_generic_event_t *event)
 {
 }
 
+// RG: put window in foreground upon launch
+- (void)applicationDidFinishLaunching:(NSNotification *)aNotification
+{
+	[NSApp activateIgnoringOtherApps:YES];		// SRS - Make sure app window launches in front of Xcode window
+}
+
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
 	return YES;
