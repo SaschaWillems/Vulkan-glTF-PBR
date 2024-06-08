@@ -1918,6 +1918,15 @@ public:
 					filename.erase(std::remove(filename.begin(), filename.end(), '\n'), filename.end());
 					std::cout << filename << std::endl;
 				}
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+				// RG: test open file dialog on macos
+				std::cout << "Open window\n";
+				// NOTE: we are getting squiggles but can still build with make.
+				// ALAS: error: *** Terminating app due to uncaught exception 'NSInternalInconsistencyException', reason: 'NSWindow drag regions should only be invalidated on the Main Thread!'
+				//NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+				NSAlert *alert = [[NSAlert alloc] init];
+				[alert setMessageText:@"Hi there."];
+				[alert runModal];
 #endif
 				if (!filename.empty()) {
 					vkDeviceWaitIdle(device);

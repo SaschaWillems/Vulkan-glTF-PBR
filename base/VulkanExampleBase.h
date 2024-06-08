@@ -30,6 +30,8 @@
 #include <Carbon/Carbon.h>
 #include <QuartzCore/CAMetalLayer.h>
 #include <CoreVideo/CVDisplayLink.h>
+// RG:
+#include <AppKit/AppKit.h>
 #endif
 
 #include <iostream>
