@@ -1813,8 +1813,10 @@ void VulkanExampleBase::showOpenFileDialog()
 	{
 		for ( NSURL* URL in [openDlg URLs] )
 		{
-			NSLog( @"%@", [URL path] );
-			std::cout << [[URL path] UTF8String] << std::endl;
+			//NSLog( @"%@", [URL path] );
+			gltfFileName = [[URL path] UTF8String];
+			std::cout << gltfFileName << std::endl;
+			
 		}
 	}   
 

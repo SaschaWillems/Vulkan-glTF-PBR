@@ -9,6 +9,12 @@
 // glTF format: https://github.com/KhronosGroup/glTF
 // tinyglTF loader: https://github.com/syoyo/tinygltf
 
+// RG: macos-patch-rg
+// * mouse y coordinate
+// * foreground on launch
+// * open gltf file dialog
+// * drag and drop
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1940,7 +1946,10 @@ public:
 				//this->showMessageBox();
 				//performSelectorOnMainThread(showMessageBox, nil, NO);
 				//[self performSelectorOnMainThread:@selector(showMessageBox:) withObject:nil waitUntilDone:YES];
-
+				// TEST: set filename from Base
+				// YESS: works but now get the signalling right for opengltfFileButtonClicked
+				// and gltfFileName.
+				filename = gltfFileName;
 #endif
 				if (!filename.empty()) {
 					vkDeviceWaitIdle(device);

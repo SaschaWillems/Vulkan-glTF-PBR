@@ -243,6 +243,7 @@ public:
 	void handleEvent(const xcb_generic_event_t *event);
 #elif defined(VK_USE_PLATFORM_MACOS_MVK)
 	// RG:
+	std::string gltfFileName = "";
 	void showOpenFileDialog();
 	//NSAlert* showMessageBox();
 	NSModalResponse showMessageBox();
