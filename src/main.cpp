@@ -1925,6 +1925,8 @@ public:
 					std::cout << filename << std::endl;
 				}
 #elif defined(VK_USE_PLATFORM_MACOS_MVK)
+				// TEST: can we get the button rect?
+				//std::cout << ImGui::IsWindowHovered() << std::endl;
 				// RG: test open file dialog on macos
 				std::cout << "Open button clicked" << std::endl;
 				opengltfFileButtonClicked = true;
@@ -1949,14 +1951,13 @@ public:
 				// TEST: set filename from Base
 				// YESS: works but now get the signalling right for opengltfFileButtonClicked
 				// and gltfFileName.
-				filename = gltfFileName;
+				//filename = gltfFileName;
+				// We must load file in render()
 #endif
 				if (!filename.empty()) {
 					vkDeviceWaitIdle(device);
 					loadScene(filename);
 					setupDescriptors();
-					// RG:
-					gltfFileName = "";
 				}
 			}
 #endif
@@ -2075,6 +2076,15 @@ public:
 		 	updateOverlay();
 		// 	ui->updateTimer = 1.0f / 60.0f;
 		// }
+
+		// RG: must load in render loop
+		if (!gltfFileName.empty()) {
+			vkDeviceWaitIdle(device);
+			loadScene(gltfFileName);
+			setupDescriptors();
+			// RG:
+			gltfFileName = "";
+		}
 
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX));
 		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));

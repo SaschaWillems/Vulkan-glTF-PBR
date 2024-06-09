@@ -1726,14 +1726,17 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	// NOTE: we get this event before the imgui event!! So signaling is fucked up.
 	// We get no MessageBox the first time. Fix it!!.
 	// We should be doing this in a generic responder.
-	if (vulkanExampleBase->opengltfFileButtonClicked/*  && !vulkanExampleBase->messageBoxShowing */) {
+	// SHIT: opengltfFileButtonClicked is geen fijne bool.
+	// Beter om te checken of we een mouseup hebben binnen button rect.
+	
+	if (vulkanExampleBase->ingltfFileButton/*  && !vulkanExampleBase->messageBoxShowing */) {
 		//vulkanExampleBase->messageBoxShowing = true;
 		//NSModalResponse response = vulkanExampleBase->showMessageBox();
 		std::cout << "OpenFileDialog" << std::endl;
 		vulkanExampleBase->showOpenFileDialog();
 		
 		//if (response == 0) {
-			vulkanExampleBase->opengltfFileButtonClicked = false;
+		//vulkanExampleBase->ingltfFileButton = false;
 			//vulkanExampleBase->messageBoxShowing = false;
 		//}
 	}
@@ -1765,6 +1768,16 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	// RG:
 	auto point = [self getMouseLocalPoint:event];
 	vulkanExampleBase->mouseDragged(point.x, point.y);
+
+	// RG: must we really do this to check if we are over a button during mouseup?
+	std::cout << point.x << ", " << point.y << std::endl;
+	if (point.x > 18.0f  && point.x < 104.0f && 
+	    point.y > 106.0f && point.y < 128.0f) 
+	{
+			vulkanExampleBase->ingltfFileButton = true;
+	} else {
+			vulkanExampleBase->ingltfFileButton = false;
+	}
 }
 
 - (void)scrollWheel:(NSEvent *)event

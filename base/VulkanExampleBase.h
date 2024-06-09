@@ -181,6 +181,7 @@ public:
 	xcb_window_t window;
 	xcb_intern_atom_reply_t *atom_wm_delete_window;
 #elif defined(VK_USE_PLATFORM_MACOS_MVK)
+	bool ingltfFileButton = false;
 	bool opengltfFileButtonClicked = false;
 	bool messageBoxShowing = false;
 	NSAlert* alert;
