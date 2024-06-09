@@ -1937,7 +1937,7 @@ public:
 				// NOTE: we cannot signal here and then use - (void)mouseUp:(NSEvent *)event
 				// to show the window as that event will be called before imgui here.
 				// Must use another event. But which one?
-				// Otherwise we can check of mouse is within button rect during mouseup. 
+				// Otherwise we can check if mouse is within button rect during mouseup. 
 				//NSAlert *alert = [[[NSAlert alloc] init] autorelease];
 				// NSAlert *alert = [[NSAlert alloc] init];
 				// [alert setMessageText:@"Hi there."];
@@ -1955,6 +1955,8 @@ public:
 					vkDeviceWaitIdle(device);
 					loadScene(filename);
 					setupDescriptors();
+					// RG:
+					gltfFileName = "";
 				}
 			}
 #endif
@@ -2063,7 +2065,7 @@ public:
 			return;
 		}
 
-		// RG:
+		// RG: crash
 		//this->showMessageBox();
 		//std::cout << "render()\n";
 

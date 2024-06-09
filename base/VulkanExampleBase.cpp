@@ -1725,6 +1725,7 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	// YESS: We are getting a messagebox.
 	// NOTE: we get this event before the imgui event!! So signaling is fucked up.
 	// We get no MessageBox the first time. Fix it!!.
+	// We should be doing this in a generic responder.
 	if (vulkanExampleBase->opengltfFileButtonClicked/*  && !vulkanExampleBase->messageBoxShowing */) {
 		//vulkanExampleBase->messageBoxShowing = true;
 		//NSModalResponse response = vulkanExampleBase->showMessageBox();
@@ -1815,55 +1816,9 @@ void VulkanExampleBase::showOpenFileDialog()
 		{
 			//NSLog( @"%@", [URL path] );
 			gltfFileName = [[URL path] UTF8String];
-			std::cout << gltfFileName << std::endl;
-			
+			std::cout << gltfFileName << std::endl;			
 		}
-	}   
-
-	/* //this gives you a copy of an open file dialogue
-	NSOpenPanel* openPanel = [NSOpenPanel openPanel];
-
-	//set the title of the dialogue window
-	openPanel.title = @"Choose a .glTF file";
-
-	//shoud the user be able to resize the window?
-	openPanel.showsResizeIndicator = YES;
-
-	//should the user see hidden files (for user apps - usually no)
-	openPanel.showsHiddenFiles = NO;
-
-	//can the user select a directory?
-	openPanel.canChooseDirectories = NO;
-
-	//can the user create directories while using the dialogue?
-	openPanel.canCreateDirectories = YES;
-
-	//should the user be able to select multiple files?
-	openPanel.allowsMultipleSelection = NO;
-
-	//an array of file extensions to filter the file list
-	openPanel.allowedFileTypes = @[@"gltf"];
-
-	//this launches the dialogue
-	//[openPanel beginSheetModalForWindow:appDelegate.controlsWindow
-	//				completionHandler:^(NSInteger result) {
-	if ( [openPanel runModalForDirectory:nil file:nil] == NSOKButton )
-	{
-		std::cout << "NSOKButton clicked" << std::endl;
-		// Get an array containing the full filenames of all
-		// files and directories selected.
-		NSArray* files = [openPanel filenames];
-
-		// Loop through all the files and process them.
-		for( int i = 0; i < [files count]; i++ )
-		{
-			NSString* fileName = [files objectAtIndex:i];
-
-			// Do something with the filename.
-			std::cout << fileName << std::endl;
-		}
-	} */
-
+	}  
 }
 
 // RG: Test
