@@ -2066,6 +2066,7 @@ public:
 			return;
 		}
 
+#if defined(VK_USE_PLATFORM_MACOS_MVK)
 		// RG: crash
 		//this->showMessageBox();
 		//std::cout << "render()\n";
@@ -2085,6 +2086,7 @@ public:
 			// RG:
 			gltfFileName = "";
 		}
+#endif		
 
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX));
 		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));
