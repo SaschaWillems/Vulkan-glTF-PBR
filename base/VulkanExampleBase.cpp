@@ -1723,7 +1723,7 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 
 	// RG:
 	// YESS: We are getting a messagebox.
-	// NOTE: we get this event before the imgui event!! So signaling is fucked up.
+	// NOTE: we get this event before the imgui event!! So signaling is f*cked up.
 	// We get no MessageBox the first time. Fix it!!.
 	// We should be doing this in a generic responder.
 	// SHIT: opengltfFileButtonClicked is geen fijne bool.
