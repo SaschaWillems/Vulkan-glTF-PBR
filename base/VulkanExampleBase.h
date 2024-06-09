@@ -181,6 +181,9 @@ public:
 	xcb_window_t window;
 	xcb_intern_atom_reply_t *atom_wm_delete_window;
 #elif defined(VK_USE_PLATFORM_MACOS_MVK)
+	bool opengltfFileButtonClicked = false;
+	bool messageBoxShowing = false;
+	NSAlert* alert;
 	NSWindow* window;
 #endif
 
@@ -239,6 +242,10 @@ public:
 	void initxcbConnection();
 	void handleEvent(const xcb_generic_event_t *event);
 #elif defined(VK_USE_PLATFORM_MACOS_MVK)
+	// RG:
+	void showOpenFileDialog();
+	//NSAlert* showMessageBox();
+	NSModalResponse showMessageBox();
 	NSWindow* setupWindow();
 	void mouseDragged(float x, float y);
 	void windowWillResize(float x, float y);

@@ -1920,13 +1920,27 @@ public:
 				}
 #elif defined(VK_USE_PLATFORM_MACOS_MVK)
 				// RG: test open file dialog on macos
-				std::cout << "Open window\n";
+				std::cout << "Open button clicked" << std::endl;
+				opengltfFileButtonClicked = true;
 				// NOTE: we are getting squiggles but can still build with make.
-				// ALAS: error: *** Terminating app due to uncaught exception 'NSInternalInconsistencyException', reason: 'NSWindow drag regions should only be invalidated on the Main Thread!'
+				// ALAS: error: *** Terminating app due to uncaught exception 'NSInternalInconsistencyException',
+				// reason: 'NSWindow drag regions should only be invalidated on the Main Thread!'
+				// We cannot do macOS UI stuff from this thread. Must do it from the
+				// main thread. We can use a bool to signal user clicked Open gltf file
+				// button.
+				// NOTE: we cannot signal here and then use - (void)mouseUp:(NSEvent *)event
+				// to show the window as that event will be called before imgui here.
+				// Must use another event. But which one?
+				// Otherwise we can check of mouse is within button rect during mouseup. 
 				//NSAlert *alert = [[[NSAlert alloc] init] autorelease];
-				NSAlert *alert = [[NSAlert alloc] init];
-				[alert setMessageText:@"Hi there."];
-				[alert runModal];
+				// NSAlert *alert = [[NSAlert alloc] init];
+				// [alert setMessageText:@"Hi there."];
+				// [alert runModal];
+				//this->showMessageBox();
+				//this->showMessageBox();
+				//performSelectorOnMainThread(showMessageBox, nil, NO);
+				//[self performSelectorOnMainThread:@selector(showMessageBox:) withObject:nil waitUntilDone:YES];
+
 #endif
 				if (!filename.empty()) {
 					vkDeviceWaitIdle(device);
@@ -2039,6 +2053,10 @@ public:
 		if (!prepared) {
 			return;
 		}
+
+		// RG:
+		//this->showMessageBox();
+		//std::cout << "render()\n";
 
 		// RG: this also caused ingui not to work properly on macos
 		// ui->updateTimer -= frameTimer;
@@ -2209,6 +2227,9 @@ int main(const int argc, const char *argv[])
 		vulkanApplication->initVulkan();
 		vulkanApplication->setupWindow();
 		vulkanApplication->prepare();
+		// RG: This works but how can we call from imgui?
+		// HACK: set bool and then call from renderloop?
+		//vulkanApplication->showMessageBox();
 		vulkanApplication->renderLoop();
 		delete(vulkanApplication);
 	}
