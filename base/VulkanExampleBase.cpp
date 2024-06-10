@@ -1637,6 +1637,13 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	{
 		self.wantsLayer = YES;
 		self.layer = [CAMetalLayer layer];
+
+		// RG: drag and drop
+		//if (@available(macOS 10.13, *)) {
+		//    [self registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
+		//} else {
+			[self registerForDraggedTypes:@[NSFilenamesPboardType]];
+		//}
 	}
 	return self;
 }
@@ -1651,6 +1658,27 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 - (BOOL)acceptsFirstResponder
 {
 	return YES;
+}
+
+// RG: drag and drop
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender
+{
+	std::cout << "drag" << std::endl;
+}
+
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender
+{
+	std::cout << "drop" << std::endl;
+	
+	NSPasteboard *pboard = [sender draggingPasteboard]; 
+    if ( [[pboard types] containsObject:NSURLPboardType] ) {
+        NSURL *fileURL = [NSURL URLFromPasteboard:pboard];
+        // Perform operation using the file’s URL
+		vulkanExampleBase->gltfFileName = [fileURL fileSystemRepresentation];
+		std::cout << vulkanExampleBase->gltfFileName << std::endl;
+		
+    }
+    return YES;
 }
 
 - (void)keyDown:(NSEvent*)event
