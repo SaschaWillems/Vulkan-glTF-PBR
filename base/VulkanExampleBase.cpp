@@ -1815,6 +1815,7 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 // RG: Test
 // TODO: drag and drop
 // See: https://stackoverflow.com/questions/11890764/get-path-of-dropped-file-in-cocoa-application
+// See: https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/DragandDrop/DragandDrop.html
 void VulkanExampleBase::showOpenFileDialog()
 {
 	NSOpenPanel* openDlg = [NSOpenPanel openPanel];

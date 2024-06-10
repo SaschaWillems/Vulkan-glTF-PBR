@@ -239,3 +239,7 @@ android/**/.apk
 libs/draco/*.lib
 external/draco/*
 !external/draco/README.md
+
+# ignore macOS files
+.DS_Store
+*.dSYM
