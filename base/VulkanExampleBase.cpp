@@ -1770,13 +1770,16 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	vulkanExampleBase->mouseDragged(point.x, point.y);
 
 	// RG: must we really do this to check if we are over a button during mouseup?
+	// Yes, it is the proper check but we should get button rect from imgui, not hardcode.
+	// TODO: must also do this in mouseDragged to catch case where user clicks in button
+	// drags outside and then releases button so better use a function isMouseInButton(NSPoint point).
 	std::cout << point.x << ", " << point.y << std::endl;
 	if (point.x > 18.0f  && point.x < 104.0f && 
 	    point.y > 106.0f && point.y < 128.0f) 
 	{
-			vulkanExampleBase->ingltfFileButton = true;
+		vulkanExampleBase->ingltfFileButton = true;
 	} else {
-			vulkanExampleBase->ingltfFileButton = false;
+		vulkanExampleBase->ingltfFileButton = false;
 	}
 }
 
