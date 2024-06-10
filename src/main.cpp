@@ -13,7 +13,7 @@
 // * mouse y coordinate
 // * foreground on launch
 // * open gltf file dialog
-// * TODO: drag and drop
+// * drag and drop
 
 #include <stdio.h>
 #include <stdlib.h>

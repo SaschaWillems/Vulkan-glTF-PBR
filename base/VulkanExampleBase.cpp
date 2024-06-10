@@ -1644,6 +1644,10 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 		//} else {
 		//	[self registerForDraggedTypes:@[NSFilenamesPboardType]];
 		//}
+		// TODO: only accept .gltf files
+		// This does not work.
+		//NSArray* fileTypes = [NSArray arrayWithObjects:@"gltf",@"GLTF",@"glTF",nil];
+		//[self registerForDraggedTypes:fileTypes];
 	}
 	return self;
 }
@@ -1672,9 +1676,18 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	std::cout << "drop" << std::endl;
 	
 	NSPasteboard *pboard = [sender draggingPasteboard]; 
-    if ( [[pboard types] containsObject:NSURLPboardType] ) { // deprecated
+    if ( [[pboard types] containsObject:NSURLPboardType] ) { // deprecated but works
 	//if ( [[pboard types] containsObject:NSPasteboardTypeURL] ) {
         NSURL *fileURL = [NSURL URLFromPasteboard:pboard];
+
+		// Check if file extension is .gltf otherwise return NO.
+		// NOTE: https://stackoverflow.com/questions/3703554/understanding-nsstring-comparison
+		//if ( ![[fileURL pathExtension] isEqualToString:@"gltf"] ) {
+		if ( [[fileURL pathExtension] caseInsensitiveCompare:@"gltf"] != NSOrderedSame ) {
+			std::cout  << "cannot load: ." << [[fileURL pathExtension] UTF8String] << " file" << std::endl;
+			return NO;
+		}
+
         // Perform operation using the file’s URL
 		vulkanExampleBase->gltfFileName = [fileURL fileSystemRepresentation];
 		std::cout << vulkanExampleBase->gltfFileName << std::endl;
@@ -1862,7 +1875,6 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 @end
 
 // RG: Test
-// TODO: drag and drop
 // See: https://stackoverflow.com/questions/11890764/get-path-of-dropped-file-in-cocoa-application
 // See: https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/DragandDrop/DragandDrop.html
 void VulkanExampleBase::showOpenFileDialog()
@@ -1871,11 +1883,13 @@ void VulkanExampleBase::showOpenFileDialog()
 	[openDlg setCanChooseFiles:YES];
 	[openDlg setCanChooseDirectories:NO];
 	[openDlg setAllowsMultipleSelection:NO];
-	[openDlg setAllowedFileTypes:@[@"gltf"]];
-	//[openDlg setAllowedContentTypes:@[@"gltf"]];
+	//NSArray* fileTypes = [NSArray arrayWithObjects:@"gltf",@"GLTF",@"glTF",nil];
+	[openDlg setAllowedFileTypes:@[@"gltf"]]; // deprecated but works
+	//NSArray* uttypes = [UTType typesWithTag:@"gltf" tagClass:UTTagClassFilenameExtension conformingToType:nil];
+	//[openDlg setAllowedContentTypes:uttypes]; 
 	
 
-	//if ( [openDlg runModal] == NSOKButton )
+	//if ( [openDlg runModal] == NSOKButton ) // deprecated
 	if ( [openDlg runModal] == NSModalResponseOK )
 	{
 		for ( NSURL* URL in [openDlg URLs] )
