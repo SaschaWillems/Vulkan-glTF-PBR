@@ -1931,6 +1931,7 @@ public:
 				std::cout << "Open button clicked" << std::endl;
 				opengltfFileButtonClicked = true;
 				// NOTE: we are getting squiggles but can still build with make.
+				// Squiggles are because vscode sees this file as C++ not Obj-C.
 				// ALAS: error: *** Terminating app due to uncaught exception 'NSInternalInconsistencyException',
 				// reason: 'NSWindow drag regions should only be invalidated on the Main Thread!'
 				// We cannot do macOS UI stuff from this thread. Must do it from the

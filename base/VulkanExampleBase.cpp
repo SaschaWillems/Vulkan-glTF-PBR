@@ -1693,6 +1693,19 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 }
 
 // RG:
+-(bool)isMouseInButton:(NSPoint)point
+{
+	// NOTE: we are hardcoding this but should really get this from imgui. But how?
+	if (point.x > 18.0f  && point.x < 104.0f && 
+	    point.y > 106.0f && point.y < 128.0f) 
+	{
+		return true;
+	} else {
+		return false;
+	}
+}
+
+// RG:
 - (NSPoint)getMouseLocalPoint:(NSEvent*)event
 {
 	NSPoint location = [event locationInWindow];
@@ -1728,6 +1741,7 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	// We should be doing this in a generic responder.
 	// SHIT: opengltfFileButtonClicked is geen fijne bool.
 	// Beter om te checken of we een mouseup hebben binnen button rect.
+	vulkanExampleBase->ingltfFileButton = [self isMouseInButton:point];
 	
 	if (vulkanExampleBase->ingltfFileButton/*  && !vulkanExampleBase->messageBoxShowing */) {
 		//vulkanExampleBase->messageBoxShowing = true;
@@ -1772,15 +1786,17 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	// RG: must we really do this to check if we are over a button during mouseup?
 	// Yes, it is the proper check but we should get button rect from imgui, not hardcode.
 	// TODO: must also do this in mouseDragged to catch case where user clicks in button
-	// drags outside and then releases button so better use a function isMouseInButton(NSPoint point).
+	// drags outside and then releases button so better use a function isMouseInButton(point).
+	// TODO: also do in mousedown.
 	std::cout << point.x << ", " << point.y << std::endl;
-	if (point.x > 18.0f  && point.x < 104.0f && 
-	    point.y > 106.0f && point.y < 128.0f) 
-	{
-		vulkanExampleBase->ingltfFileButton = true;
-	} else {
-		vulkanExampleBase->ingltfFileButton = false;
-	}
+	// if (point.x > 18.0f  && point.x < 104.0f && 
+	//     point.y > 106.0f && point.y < 128.0f) 
+	// {
+	// 	vulkanExampleBase->ingltfFileButton = true;
+	// } else {
+	// 	vulkanExampleBase->ingltfFileButton = false;
+	// }
+	// NOTE: we only need to check in mouseup
 }
 
 - (void)scrollWheel:(NSEvent *)event
