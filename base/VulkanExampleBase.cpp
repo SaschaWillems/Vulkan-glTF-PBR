@@ -1677,7 +1677,8 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	
 	NSPasteboard *pboard = [sender draggingPasteboard]; 
     if ( [[pboard types] containsObject:NSURLPboardType] ) { // deprecated but works
-	//if ( [[pboard types] containsObject:NSPasteboardTypeURL] ) {
+	//if ( [[pboard types] containsObject:NSPasteboardTypeURL] ) { // no go
+		std::cout << "pasteboard" << std::endl;
         NSURL *fileURL = [NSURL URLFromPasteboard:pboard];
 
 		// Check if file extension is .gltf otherwise return NO.
@@ -1874,6 +1875,7 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 
 @end
 
+
 // RG: Test
 // See: https://stackoverflow.com/questions/11890764/get-path-of-dropped-file-in-cocoa-application
 // See: https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/DragandDrop/DragandDrop.html
@@ -1885,8 +1887,13 @@ void VulkanExampleBase::showOpenFileDialog()
 	[openDlg setAllowsMultipleSelection:NO];
 	//NSArray* fileTypes = [NSArray arrayWithObjects:@"gltf",@"GLTF",@"glTF",nil];
 	[openDlg setAllowedFileTypes:@[@"gltf"]]; // deprecated but works
+
+	// NOTE: UTType needs:
+	// @import UniformTypeIdentifiers;
+	// But modules are disabled in makefile. So no go for setAllowedContentTypes
+	// See: https://stackoverflow.com/questions/70512722/what-header-to-include-to-use-uttype-in-objective-c
 	//NSArray* uttypes = [UTType typesWithTag:@"gltf" tagClass:UTTagClassFilenameExtension conformingToType:nil];
-	//[openDlg setAllowedContentTypes:uttypes]; 
+	//[openDlg setAllowedContentTypes:uttypes]; // no go
 	
 
 	//if ( [openDlg runModal] == NSOKButton ) // deprecated
