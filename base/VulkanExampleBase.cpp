@@ -1640,9 +1640,9 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 
 		// RG: drag and drop
 		//if (@available(macOS 10.13, *)) {
-		//    [self registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
+		    [self registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
 		//} else {
-			[self registerForDraggedTypes:@[NSFilenamesPboardType]];
+		//	[self registerForDraggedTypes:@[NSFilenamesPboardType]];
 		//}
 	}
 	return self;
@@ -1664,6 +1664,7 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender
 {
 	std::cout << "drag" << std::endl;
+	return YES;
 }
 
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender
@@ -1671,7 +1672,8 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	std::cout << "drop" << std::endl;
 	
 	NSPasteboard *pboard = [sender draggingPasteboard]; 
-    if ( [[pboard types] containsObject:NSURLPboardType] ) {
+    if ( [[pboard types] containsObject:NSURLPboardType] ) { // deprecated
+	//if ( [[pboard types] containsObject:NSPasteboardTypeURL] ) {
         NSURL *fileURL = [NSURL URLFromPasteboard:pboard];
         // Perform operation using the file’s URL
 		vulkanExampleBase->gltfFileName = [fileURL fileSystemRepresentation];
@@ -1870,8 +1872,11 @@ void VulkanExampleBase::showOpenFileDialog()
 	[openDlg setCanChooseDirectories:NO];
 	[openDlg setAllowsMultipleSelection:NO];
 	[openDlg setAllowedFileTypes:@[@"gltf"]];
+	//[openDlg setAllowedContentTypes:@[@"gltf"]];
+	
 
-	if ( [openDlg runModal] == NSOKButton )
+	//if ( [openDlg runModal] == NSOKButton )
+	if ( [openDlg runModal] == NSModalResponseOK )
 	{
 		for ( NSURL* URL in [openDlg URLs] )
 		{
