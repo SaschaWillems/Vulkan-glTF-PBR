@@ -2067,18 +2067,13 @@ public:
 			return;
 		}
 
-#if defined(VK_USE_PLATFORM_MACOS_MVK)
-		// RG: crash
-		//this->showMessageBox();
-		//std::cout << "render()\n";
-
-		// RG: this also caused ingui not to work properly on macos
-		// ui->updateTimer -= frameTimer;
-		// if (ui->updateTimer <= 0.0f) {
+		ui->updateTimer -= frameTimer;
+		if (ui->updateTimer <= 0.0f) {
 		 	updateOverlay();
-		// 	ui->updateTimer = 1.0f / 60.0f;
-		// }
+		 	ui->updateTimer = 1.0f / 60.0f;
+		}
 
+#if defined(VK_USE_PLATFORM_MACOS_MVK)
 		// RG: must load in render loop
 		if (!gltfFileName.empty()) {
 			vkDeviceWaitIdle(device);
