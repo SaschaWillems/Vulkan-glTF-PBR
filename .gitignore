@@ -246,3 +246,7 @@ external/draco/*
 
 # ignore .vscode dir
 .vscode/
+
+# ignore object files
+*.o
+
