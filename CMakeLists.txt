@@ -14,9 +14,6 @@ include_directories(external/tinygltf)
 include_directories(external/basisu/transcoder)
 include_directories(external/basisu/zstd)
 include_directories(base)
-# RG:
-#include_directories(/opt/homebrew/include)
-#include_directories(/Users/rg/rcsim2/Vulkan/external/gli)
 
 OPTION(USE_D2D_WSI "Build the project using Direct to Display swapchain" OFF)
 OPTION(USE_WAYLAND_WSI "Build the project using Wayland swapchain" OFF)
