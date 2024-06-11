@@ -17,7 +17,6 @@
 #include "macros.h"
 #include "VulkanDevice.hpp"
 
-// RG:
 #include <gli/gli.hpp>
 
 #if defined(__ANDROID__)
