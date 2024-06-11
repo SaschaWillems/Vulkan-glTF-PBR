@@ -2037,7 +2037,7 @@ public:
 		}
 
 #if defined(VK_USE_PLATFORM_MACOS_MVK)
-		// must load file here in render loop
+		// Must load file here in render loop
 		if (!gltfFileName.empty()) {
 			vkDeviceWaitIdle(device);
 			loadScene(gltfFileName);
