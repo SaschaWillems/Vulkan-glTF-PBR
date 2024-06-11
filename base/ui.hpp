@@ -78,8 +78,6 @@ public:
 		ImGuiStyle& style = ImGui::GetStyle();
 		style.FrameBorderSize = 0.0f;
 		style.WindowBorderSize = 0.0f;
-		// RG:
-		//style.WindowRounding = 0.0f;
 
 		/*
 			Descriptor pool
