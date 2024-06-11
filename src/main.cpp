@@ -2037,6 +2037,8 @@ public:
 		}
 
 #if defined(VK_USE_PLATFORM_MACOS_MVK)
+		// Need this for smooth imgui controls
+		updateOverlay();
 		// Must load file here in render loop
 		if (!gltfFileName.empty()) {
 			vkDeviceWaitIdle(device);
