@@ -251,4 +251,6 @@ external/draco/*
 *.dSYM
 *.SYMDEF
 
+src/main
+
 
