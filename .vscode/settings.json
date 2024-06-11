@@ -1,6 +1,0 @@
-{
-    "C_Cpp.default.compilerPath": "/usr/bin/clang++",
-    "files.associations": {
-        "chrono": "cpp"
-    }
-}
