@@ -9,12 +9,6 @@
 // glTF format: https://github.com/KhronosGroup/glTF
 // tinyglTF loader: https://github.com/syoyo/tinygltf
 
-// RG: macos-patch-rg
-// * mouse y coordinate
-// * foreground on launch
-// * open gltf file dialog
-// * drag and drop
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1863,11 +1857,6 @@ public:
 		io.DisplaySize = ImVec2((float)width, (float)height);
 		io.DeltaTime = frameTimer;
 
-		// RG:
-		//int y = mousePos.y;
-		//y = y - height;
-		//y = -y;
-
 		io.MousePos = ImVec2(mousePos.x, mousePos.y);
 		io.MouseDown[0] = mouseButtons.left;
 		io.MouseDown[1] = mouseButtons.right;
@@ -1925,34 +1914,8 @@ public:
 					std::cout << filename << std::endl;
 				}
 #elif defined(VK_USE_PLATFORM_MACOS_MVK)
-				// TEST: can we get the button rect?
-				//std::cout << ImGui::IsWindowHovered() << std::endl;
-				// RG: test open file dialog on macos
 				std::cout << "Open button clicked" << std::endl;
 				opengltfFileButtonClicked = true;
-				// NOTE: we are getting squiggles but can still build with make.
-				// Squiggles are because vscode sees this file as C++ not Obj-C.
-				// ALAS: error: *** Terminating app due to uncaught exception 'NSInternalInconsistencyException',
-				// reason: 'NSWindow drag regions should only be invalidated on the Main Thread!'
-				// We cannot do macOS UI stuff from this thread. Must do it from the
-				// main thread. We can use a bool to signal user clicked Open gltf file
-				// button.
-				// NOTE: we cannot signal here and then use - (void)mouseUp:(NSEvent *)event
-				// to show the window as that event will be called before imgui here.
-				// Must use another event. But which one?
-				// Otherwise we can check if mouse is within button rect during mouseup. 
-				//NSAlert *alert = [[[NSAlert alloc] init] autorelease];
-				// NSAlert *alert = [[NSAlert alloc] init];
-				// [alert setMessageText:@"Hi there."];
-				// [alert runModal];
-				//this->showMessageBox();
-				//this->showMessageBox();
-				//performSelectorOnMainThread(showMessageBox, nil, NO);
-				//[self performSelectorOnMainThread:@selector(showMessageBox:) withObject:nil waitUntilDone:YES];
-				// TEST: set filename from Base
-				// YESS: works but now get the signalling right for opengltfFileButtonClicked
-				// and gltfFileName.
-				//filename = gltfFileName;
 				// We must load file in render()
 #endif
 				if (!filename.empty()) {
@@ -2074,12 +2037,11 @@ public:
 		}
 
 #if defined(VK_USE_PLATFORM_MACOS_MVK)
-		// RG: must load in render loop
+		// must load file here in render loop
 		if (!gltfFileName.empty()) {
 			vkDeviceWaitIdle(device);
 			loadScene(gltfFileName);
 			setupDescriptors();
-			// RG:
 			gltfFileName = "";
 		}
 #endif		
@@ -2246,9 +2208,6 @@ int main(const int argc, const char *argv[])
 		vulkanApplication->initVulkan();
 		vulkanApplication->setupWindow();
 		vulkanApplication->prepare();
-		// RG: This works but how can we call from imgui?
-		// HACK: set bool and then call from renderloop?
-		//vulkanApplication->showMessageBox();
 		vulkanApplication->renderLoop();
 		delete(vulkanApplication);
 	}
