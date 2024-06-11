@@ -243,3 +243,6 @@ external/draco/*
 # ignore macOS files
 .DS_Store
 *.dSYM
+
+# ignore .vscode dir
+.vscode/
