@@ -249,4 +249,6 @@ external/draco/*
 
 # ignore object files
 *.o
+*.SYMDEF
+
 
