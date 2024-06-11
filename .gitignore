@@ -252,5 +252,7 @@ external/draco/*
 *.SYMDEF
 
 src/main
+src/imgui.ini
+
 
 
