@@ -239,3 +239,20 @@ android/**/.apk
 libs/draco/*.lib
 external/draco/*
 !external/draco/README.md
+
+# ignore macOS files
+.DS_Store
+
+# ignore .vscode dir
+.vscode/
+
+# ignore object files
+*.o
+*.dSYM
+*.SYMDEF
+
+src/main
+src/imgui.ini
+
+
+
