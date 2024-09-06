@@ -1584,6 +1584,11 @@ void VulkanExampleBase::handleEvent(const xcb_generic_event_t *event)
 {
 }
 
+- (void)applicationDidFinishLaunching:(NSNotification *)aNotification
+{
+	[NSApp activateIgnoringOtherApps:YES];		// SRS - Make sure app window launches in front of Xcode window
+}
+
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
 	return YES;
@@ -1622,6 +1627,9 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	{
 		self.wantsLayer = YES;
 		self.layer = [CAMetalLayer layer];
+
+		// drag and drop
+		[self registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
 	}
 	return self;
 }
@@ -1636,6 +1644,37 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 - (BOOL)acceptsFirstResponder
 {
 	return YES;
+}
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender
+{
+	std::cout << "drag" << std::endl;
+
+	return YES;
+}
+
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender
+{
+	std::cout << "drop" << std::endl;
+	
+	NSPasteboard *pboard = [sender draggingPasteboard];
+
+    if ( [[pboard types] containsObject:NSURLPboardType] ) {
+
+        NSURL *fileURL = [NSURL URLFromPasteboard:pboard];
+
+		// Check if file extension is .gltf otherwise return NO
+		if ( [[fileURL pathExtension] caseInsensitiveCompare:@"gltf"] != NSOrderedSame ) {
+			std::cout  << "cannot load: ." << [[fileURL pathExtension] UTF8String] << " file" << std::endl;
+			return NO;
+		}
+
+        // Perform operation using the file’s URL
+		vulkanExampleBase->gltfFileName = [fileURL fileSystemRepresentation];
+		std::cout << vulkanExampleBase->gltfFileName << std::endl;		
+    }
+
+    return YES;
 }
 
 - (void)keyDown:(NSEvent*)event
@@ -1677,20 +1716,50 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 	}
 }
 
-- (void)mouseDown:(NSEvent *)event
+-(bool)isMouseInButton:(NSPoint)point
+{
+	// NOTE: we are hardcoding this but should really get this from imgui. But how?
+	if (point.x > 18.0f  && point.x < 104.0f && 
+	    point.y > 106.0f && point.y < 128.0f) 
+	{
+		return true;
+	} else {
+		return false;
+	}
+}
+
+- (NSPoint)getMouseLocalPoint:(NSEvent*)event
 {
 	NSPoint location = [event locationInWindow];
 	NSPoint point = [self convertPoint:location fromView:nil];
+	point.y = self.frame.size.height - point.y;
+	return point;
+}
+
+
+- (void)mouseDown:(NSEvent *)event
+{
+	NSPoint location = [event locationInWindow];
+	auto point = [self getMouseLocalPoint:event];
 	vulkanExampleBase->mousePos = glm::vec2(point.x, point.y);
-	vulkanExampleBase->mouseButtons.left = true;
+	vulkanExampleBase->mouseButtons.left = true;	
 }
 
 - (void)mouseUp:(NSEvent *)event
 {
 	NSPoint location = [event locationInWindow];
-	NSPoint point = [self convertPoint:location fromView:nil];
+	auto point = [self getMouseLocalPoint:event];
 	vulkanExampleBase->mousePos = glm::vec2(point.x, point.y);
 	vulkanExampleBase->mouseButtons.left = false;
+
+	// Check if mouseup is in button
+	vulkanExampleBase->ingltfFileButton = [self isMouseInButton:point];
+	
+	if (vulkanExampleBase->ingltfFileButton) {
+
+		vulkanExampleBase->showOpenFileDialog();
+		
+	}
 }
 
 - (void)otherMouseDown:(NSEvent *)event
@@ -1706,15 +1775,18 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 - (void)mouseDragged:(NSEvent *)event
 {
 	NSPoint location = [event locationInWindow];
-	NSPoint point = [self convertPoint:location fromView:nil];
+	auto point = [self getMouseLocalPoint:event];
 	vulkanExampleBase->mouseDragged(point.x, point.y);
 }
 
 - (void)mouseMoved:(NSEvent *)event
 {
 	NSPoint location = [event locationInWindow];
-	NSPoint point = [self convertPoint:location fromView:nil];
+	auto point = [self getMouseLocalPoint:event];
 	vulkanExampleBase->mouseDragged(point.x, point.y);
+
+	// Where is our mouse?
+	std::cout << point.x << ", " << point.y << std::endl;
 }
 
 - (void)scrollWheel:(NSEvent *)event
@@ -1748,6 +1820,32 @@ CVReturn OnDisplayLinkOutput(CVDisplayLinkRef displayLink, const CVTimeStamp *in
 }
 
 @end
+
+void VulkanExampleBase::showOpenFileDialog()
+{
+	NSOpenPanel* openDlg = [NSOpenPanel openPanel];
+	[openDlg setCanChooseFiles:YES];
+	[openDlg setCanChooseDirectories:NO];
+	[openDlg setAllowsMultipleSelection:NO];
+	[openDlg setAllowedFileTypes:@[@"gltf"]];
+
+	if ( [openDlg runModal] == NSModalResponseOK )
+	{
+		for ( NSURL* URL in [openDlg URLs] )
+		{
+			gltfFileName = [[URL path] UTF8String];
+			std::cout << gltfFileName << std::endl;			
+		}
+	}  
+}
+
+NSModalResponse VulkanExampleBase::showMessageBox()
+{
+	alert = [[NSAlert alloc] init];
+	[alert setMessageText:@"Hi Vulkan."];
+
+	return [alert runModal];
+}
 
 NSWindow* VulkanExampleBase::setupWindow()
 {
@@ -2012,15 +2110,11 @@ void VulkanExampleBase::windowResize()
 void VulkanExampleBase::handleMouseMove(int32_t x, int32_t y)
 {
 	int32_t dx = (int32_t)mousePos.x - x;
+	
 	int32_t dy = (int32_t)mousePos.y - y;
 
 	ImGuiIO& io = ImGui::GetIO();
 	bool handled = io.WantCaptureMouse;
-
-	if (handled) {
-		mousePos = glm::vec2((float)x, (float)y);
-		return;
-	}
 
 	if (handled) {
 		mousePos = glm::vec2((float)x, (float)y);
