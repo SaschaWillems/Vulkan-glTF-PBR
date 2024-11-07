@@ -1914,7 +1914,6 @@ public:
 					std::cout << filename << std::endl;
 				}
 #elif defined(VK_USE_PLATFORM_MACOS_MVK)
-				std::cout << "Open button clicked" << std::endl;
 				opengltfFileButtonClicked = true;
 				// We must load file in render()
 #endif
@@ -2032,8 +2031,8 @@ public:
 
 		ui->updateTimer -= frameTimer;
 		if (ui->updateTimer <= 0.0f) {
-		 	updateOverlay();
-		 	ui->updateTimer = 1.0f / 60.0f;
+			updateOverlay();
+			ui->updateTimer = 1.0f / 60.0f;
 		}
 
 #if defined(VK_USE_PLATFORM_MACOS_MVK)
@@ -2046,7 +2045,7 @@ public:
 			setupDescriptors();
 			gltfFileName = "";
 		}
-#endif		
+#endif
 
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX));
 		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));
