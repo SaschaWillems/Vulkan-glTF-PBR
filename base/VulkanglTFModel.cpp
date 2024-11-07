@@ -6,8 +6,6 @@
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
 
-//#pragma once
-
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #if defined(__ANDROID__)
@@ -1046,6 +1044,11 @@ namespace vkglTF
 				const tinygltf::Buffer &buffer = gltfModel.buffers[bufferView.buffer];
 				newSkin->inverseBindMatrices.resize(accessor.count);
 				memcpy(newSkin->inverseBindMatrices.data(), &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(glm::mat4));
+			}
+
+			if (newSkin->joints.size() > MAX_NUM_JOINTS) {
+				std::cerr << "[WARNING] Skin " << newSkin->name << " has " << newSkin->joints.size() << " joints, which is higher than the supported maximum of " << MAX_NUM_JOINTS << "\n";
+				std::cerr << "[WARNING] glTF scene may display wrong/incomplete\n";
 			}
 
 			skins.push_back(newSkin);
