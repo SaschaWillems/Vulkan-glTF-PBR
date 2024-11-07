@@ -1913,6 +1913,10 @@ public:
 					filename.erase(std::remove(filename.begin(), filename.end(), '\n'), filename.end());
 					std::cout << filename << std::endl;
 				}
+#elif defined(VK_USE_PLATFORM_MACOS_MVK)
+				std::cout << "Open button clicked" << std::endl;
+				opengltfFileButtonClicked = true;
+				// We must load file in render()
 #endif
 				if (!filename.empty()) {
 					vkDeviceWaitIdle(device);
@@ -2028,9 +2032,21 @@ public:
 
 		ui->updateTimer -= frameTimer;
 		if (ui->updateTimer <= 0.0f) {
-			updateOverlay();
-			ui->updateTimer = 1.0f / 60.0f;
+		 	updateOverlay();
+		 	ui->updateTimer = 1.0f / 60.0f;
 		}
+
+#if defined(VK_USE_PLATFORM_MACOS_MVK)
+		// Need this for smooth imgui controls
+		updateOverlay();
+		// Must load file here in render loop
+		if (!gltfFileName.empty()) {
+			vkDeviceWaitIdle(device);
+			loadScene(gltfFileName);
+			setupDescriptors();
+			gltfFileName = "";
+		}
+#endif		
 
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX));
 		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));
