@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.10.0 FATAL_ERROR)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 
@@ -34,11 +34,8 @@ IF(EXISTS ${CMAKE_SOURCE_DIR}/external/draco/draco_features.h)
   ENDIF()
 ENDIF()
 
-# Use FindVulkan module added with CMAKE 3.7
-if (NOT CMAKE_VERSION VERSION_LESS 3.7.0)
-	message(STATUS "Using module to find Vulkan")
-	find_package(Vulkan)
-endif()
+message(STATUS "Using module to find Vulkan")
+find_package(Vulkan)
 
 IF(UNIX AND NOT APPLE)
     set(LINUX TRUE)
