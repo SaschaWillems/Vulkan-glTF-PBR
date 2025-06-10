@@ -50,22 +50,20 @@ void main()
 {
 	outColor0 = inColor0;
 
-	MeshShaderDataBlock nodeData = meshData[pushConstants.meshIndex];
-
 	vec4 locPos;
-	if (nodeData.jointCount > 0) {
+	if (meshData[pushConstants.meshIndex].jointCount > 0) {
 		// Mesh is skinned
 		mat4 skinMat = 
-			inWeight0.x * nodeData.jointMatrix[inJoint0.x] +
-			inWeight0.y * nodeData.jointMatrix[inJoint0.y] +
-			inWeight0.z * nodeData.jointMatrix[inJoint0.z] +
-			inWeight0.w * nodeData.jointMatrix[inJoint0.w];
+			inWeight0.x * meshData[pushConstants.meshIndex].jointMatrix[inJoint0.x] +
+			inWeight0.y * meshData[pushConstants.meshIndex].jointMatrix[inJoint0.y] +
+			inWeight0.z * meshData[pushConstants.meshIndex].jointMatrix[inJoint0.z] +
+			inWeight0.w * meshData[pushConstants.meshIndex].jointMatrix[inJoint0.w];
 
-		locPos = ubo.model * nodeData.matrix * skinMat * vec4(inPos, 1.0);
-		outNormal = normalize(transpose(inverse(mat3(ubo.model * nodeData.matrix * skinMat))) * inNormal);
+		locPos = ubo.model * meshData[pushConstants.meshIndex].matrix * skinMat * vec4(inPos, 1.0);
+		outNormal = normalize(transpose(inverse(mat3(ubo.model * meshData[pushConstants.meshIndex].matrix * skinMat))) * inNormal);
 	} else {
-		locPos = ubo.model * nodeData.matrix * vec4(inPos, 1.0);
-		outNormal = normalize(transpose(inverse(mat3(ubo.model * nodeData.matrix))) * inNormal);
+		locPos = ubo.model * meshData[pushConstants.meshIndex].matrix * vec4(inPos, 1.0);
+		outNormal = normalize(transpose(inverse(mat3(ubo.model * meshData[pushConstants.meshIndex].matrix))) * inNormal);
 	}
 	locPos.y = -locPos.y;
 	outWorldPos = locPos.xyz / locPos.w;

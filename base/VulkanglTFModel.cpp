@@ -607,7 +607,7 @@ namespace vkglTF
 				memcpy(mesh->uniformBuffer.mapped, &mesh->uniformBlock, sizeof(mesh->uniformBlock));
 				*/
 			} else {
-				matrix = m;
+				mesh->matrix = m;
 				// memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
 			}
 		}
