@@ -1,7 +1,7 @@
 /*
  * Vulkan physical based rendering glTF 2.0 renderer
  *
- * Copyright (C) 2018-2024 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2025 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -100,6 +100,7 @@ public:
 
 	const uint32_t renderAhead = 2;
 	uint32_t currentFrame = 0;
+	uint32_t currentSemaphore = 0;
 
 	int32_t animationIndex = 0;
 	float animationTimer = 0.0f;
@@ -1805,8 +1806,8 @@ public:
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 
 		waitFences.resize(renderAhead);
-		presentCompleteSemaphores.resize(renderAhead);
-		renderCompleteSemaphores.resize(renderAhead);
+		presentCompleteSemaphores.resize(swapChain.imageCount);
+		renderCompleteSemaphores.resize(swapChain.imageCount);
 		commandBuffers.resize(swapChain.imageCount);
 		uniformBuffers.resize(swapChain.imageCount);
 		descriptorSets.resize(swapChain.imageCount);
@@ -2050,7 +2051,7 @@ public:
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX));
 		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));
 
-		VkResult acquire = swapChain.acquireNextImage(presentCompleteSemaphores[currentFrame], &imageIndex);
+		VkResult acquire = swapChain.acquireNextImage(presentCompleteSemaphores[currentSemaphore], &imageIndex);
 		if ((acquire == VK_ERROR_OUT_OF_DATE_KHR) || (acquire == VK_SUBOPTIMAL_KHR)) {
 			windowResize();
 		}
@@ -2071,15 +2072,15 @@ public:
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.pWaitDstStageMask = &waitDstStageMask;
-		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[currentFrame];
+		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[currentSemaphore];
 		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentFrame];
+		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentSemaphore];
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
 		submitInfo.commandBufferCount = 1;
 		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentFrame]));
 
-		VkResult present = swapChain.queuePresent(queue, imageIndex, renderCompleteSemaphores[currentFrame]);
+		VkResult present = swapChain.queuePresent(queue, imageIndex, renderCompleteSemaphores[currentSemaphore]);
 		if (!((present == VK_SUCCESS) || (present == VK_SUBOPTIMAL_KHR))) {
 			if (present == VK_ERROR_OUT_OF_DATE_KHR) {
 				windowResize();
@@ -2090,8 +2091,8 @@ public:
 			}
 		}
 
-		currentFrame += 1;
-		currentFrame %= renderAhead;
+		currentFrame = (currentFrame + 1) % renderAhead;
+		currentSemaphore = (currentSemaphore + 1) % swapChain.imageCount;
 
 		if (!paused) {
 			if ((animate) && (models.scene.animations.size() > 0)) {
