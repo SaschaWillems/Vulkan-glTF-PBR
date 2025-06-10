@@ -3,7 +3,7 @@
 *
 * Encapsulates a physical Vulkan device and it's logical representation
 *
-* Copyright (C) 2016-2018 by Sascha Willems - www.saschawillems.de
+* Copyright (C) 2016-2025 by Sascha Willems - www.saschawillems.de
 *
 * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
 */
@@ -247,7 +247,7 @@ namespace vks
 		*
 		* @return VK_SUCCESS if buffer handle and memory have been created and (optionally passed) data has been copied
 		*/
-		VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, VkBuffer *buffer, VkDeviceMemory *memory, void *data = nullptr)
+		VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, VkBuffer *buffer, VkDeviceMemory *memory, void *data = nullptr, VkDeviceSize *actualBufferSize = nullptr)
 		{
 			// Create the buffer handle
 			VkBufferCreateInfo bufferCreateInfo{};
@@ -280,7 +280,7 @@ namespace vks
 					mappedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 					mappedRange.memory = *memory;
 					mappedRange.offset = 0;
-					mappedRange.size = size;
+					mappedRange.size = memReqs.size;
 					vkFlushMappedMemoryRanges(logicalDevice, 1, &mappedRange);
 				}
 				vkUnmapMemory(logicalDevice, *memory);
@@ -288,6 +288,10 @@ namespace vks
 
 			// Attach the memory to the buffer object
 			VK_CHECK_RESULT(vkBindBufferMemory(logicalDevice, *buffer, *memory, 0));
+
+			if (actualBufferSize) {
+				*actualBufferSize = memReqs.size;
+			}
 
 			return VK_SUCCESS;
 		}

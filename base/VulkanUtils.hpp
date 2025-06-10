@@ -1,7 +1,7 @@
 /*
 * Vulkan utilities
 *
-* Copyright(C) 2018-2024 by Sascha Willems - www.saschawillems.de
+* Copyright(C) 2018-2025 by Sascha Willems - www.saschawillems.de
 *
 * This code is licensed under the MIT license(MIT) (http://opensource.org/licenses/MIT)
 */
@@ -31,13 +31,14 @@ struct Buffer {
 	VkDeviceMemory memory = VK_NULL_HANDLE;
 	VkDescriptorBufferInfo descriptor;
 	int32_t count = 0;
+	VkDeviceSize actualBufferSize{ 0 };
 	void *mapped = nullptr;
 	void create(vks::VulkanDevice *device, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkDeviceSize size, bool map = true) {
 		this->device = device->logicalDevice;
-		device->createBuffer(usageFlags, memoryPropertyFlags, size, &buffer, &memory);
+		device->createBuffer(usageFlags, memoryPropertyFlags, size, &buffer, &memory, nullptr, &actualBufferSize);
 		descriptor = { buffer, 0, size };
 		if (map) {
-			VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, memory, 0, size, 0, &mapped));
+			VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, memory, 0, actualBufferSize, 0, &mapped));
 		}
 	}
 	void destroy() {
