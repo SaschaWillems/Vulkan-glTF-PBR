@@ -60,6 +60,7 @@ layout(std430, set = 3, binding = 0) readonly buffer SSBO
 };
 
 layout (push_constant) uniform PushConstants {
+	int meshIndex;
 	int materialIndex;
 } pushConstants;
 

@@ -545,23 +545,12 @@ namespace vkglTF
 	}
 
 	// Mesh
-	Mesh::Mesh(vks::VulkanDevice *device, glm::mat4 matrix) {
-		this->device = device;
-		this->uniformBlock.matrix = matrix;
-		VK_CHECK_RESULT(device->createBuffer(
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			sizeof(uniformBlock),
-			&uniformBuffer.buffer,
-			&uniformBuffer.memory,
-			&uniformBlock));
-		VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, uniformBuffer.memory, 0, sizeof(uniformBlock), 0, &uniformBuffer.mapped));
-		uniformBuffer.descriptor = { uniformBuffer.buffer, 0, sizeof(uniformBlock) };
+	// @todo: create large SSBO instead of many small uniform buffers
+	Mesh::Mesh(glm::mat4 matrix) {
+		this->matrix = matrix;
 	};
 
 	Mesh::~Mesh() {
-		vkDestroyBuffer(device->logicalDevice, uniformBuffer.buffer, nullptr);
-		vkFreeMemory(device->logicalDevice, uniformBuffer.memory, nullptr);
 		for (Primitive* p : primitives)
 			delete p;
 	}
@@ -602,6 +591,8 @@ namespace vkglTF
 		if (mesh) {
 			glm::mat4 m = getMatrix();
 			if (skin) {
+				// @todo
+				/*
 				mesh->uniformBlock.matrix = m;
 				// Update join matrices
 				glm::mat4 inverseTransform = glm::inverse(m);
@@ -614,8 +605,10 @@ namespace vkglTF
 				}
 				mesh->uniformBlock.jointcount = static_cast<uint32_t>(numJoints);
 				memcpy(mesh->uniformBuffer.mapped, &mesh->uniformBlock, sizeof(mesh->uniformBlock));
+				*/
 			} else {
-				memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
+				matrix = m;
+				// memcpy(mesh->uniformBuffer.mapped, &m, sizeof(glm::mat4));
 			}
 		}
 
@@ -808,7 +801,7 @@ namespace vkglTF
 		// Node contains mesh data
 		if (node.mesh > -1) {
 			const tinygltf::Mesh mesh = model.meshes[node.mesh];
-			Mesh *newMesh = new Mesh(device, newNode->matrix);
+			Mesh *newMesh = new Mesh(newNode->matrix);
 			for (size_t j = 0; j < mesh.primitives.size(); j++) {
 				const tinygltf::Primitive &primitive = mesh.primitives[j];
 				uint32_t vertexStart = static_cast<uint32_t>(loaderInfo.vertexPos);
@@ -1009,7 +1002,7 @@ namespace vkglTF
 		if (node.mesh > -1) {
 			const tinygltf::Mesh mesh = model.meshes[node.mesh];
 			for (size_t i = 0; i < mesh.primitives.size(); i++) {
-				auto primitive = mesh.primitives[i];
+				auto& primitive = mesh.primitives[i];
 				vertexCount += model.accessors[primitive.attributes.find("POSITION")->second].count;
 				if (primitive.indices > -1) {
 					indexCount += model.accessors[primitive.indices].count;
