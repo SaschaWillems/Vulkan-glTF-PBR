@@ -39,6 +39,7 @@ namespace vks
 		VkPhysicalDeviceMemoryProperties memoryProperties;
 		std::vector<VkQueueFamilyProperties> queueFamilyProperties;
 		VkCommandPool commandPool = VK_NULL_HANDLE;
+		bool requiresStaging = true;
 
 		struct {
 			uint32_t graphics;
@@ -70,6 +71,16 @@ namespace vks
 			assert(queueFamilyCount > 0);
 			queueFamilyProperties.resize(queueFamilyCount);
 			vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProperties.data());
+
+			// Check if the device has a host accesible device local buffer
+			// That either means BAR (max. 256 MByte) or ReBAR (SAM)/Integrated GPU with access to all memory
+			// But even 256 MByte is more than enough, and such a memory type saves us from having to stage memory
+			for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++) {
+				if (((memoryProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) > 0) && ((memoryProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) > 0)) {
+					requiresStaging = false;
+					break;
+				}
+			}
 		}
 
 		/** 

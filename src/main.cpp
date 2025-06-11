@@ -460,19 +460,29 @@ public:
 		if (shaderMeshDataBuffer.buffer != VK_NULL_HANDLE) {
 			shaderMeshDataBuffer.destroy();
 		}
-		VkDeviceSize bufferSize = shaderMeshData.size() * sizeof(ShaderMeshData);
-		Buffer stagingBuffer;
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer.buffer, &stagingBuffer.memory, shaderMeshData.data()));
-		VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
 
-		// Copy from staging buffers
-		VkCommandBuffer copyCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-		VkBufferCopy copyRegion{};
-		copyRegion.size = bufferSize;
-		vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMeshDataBuffer.buffer, 1, &copyRegion);
-		vulkanDevice->flushCommandBuffer(copyCmd, queue, true);
-		stagingBuffer.device = device;
-		stagingBuffer.destroy();
+		VkDeviceSize bufferSize = shaderMeshData.size() * sizeof(ShaderMeshData);
+
+		if (!vulkanDevice->requiresStaging) {
+			// Prefer a host visible device buffer (ReBAR/SAM on discreate GPUs, always available on integrated GPUs)
+			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
+			shaderMeshDataBuffer.device = device;
+			shaderMeshDataBuffer.map();
+			memcpy(shaderMeshDataBuffer.mapped, shaderMeshData.data(), bufferSize);
+		}
+		else {
+			Buffer stagingBuffer;
+			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer.buffer, &stagingBuffer.memory, shaderMeshData.data()));
+			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
+			// Copy from staging buffers
+			VkCommandBuffer copyCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+			VkBufferCopy copyRegion{};
+			copyRegion.size = bufferSize;
+			vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMeshDataBuffer.buffer, 1, &copyRegion);
+			vulkanDevice->flushCommandBuffer(copyCmd, queue, true);
+			stagingBuffer.device = device;
+			stagingBuffer.destroy();
+		}
 
 		// Update descriptor
 		shaderMeshDataBuffer.descriptor.buffer = shaderMeshDataBuffer.buffer;
