@@ -138,6 +138,7 @@ namespace vkglTF
 		glm::mat4 matrix;
 		glm::mat4 jointMatrix[MAX_NUM_JOINTS]{};
 		uint32_t jointcount{ 0 };
+		uint32_t index;
 		Mesh(glm::mat4 matrix);
 		~Mesh();
 		void setBoundingBox(glm::vec3 min, glm::vec3 max);

@@ -272,7 +272,7 @@ public:
 					// Pass material index for this primitive using a push constant, the shader uses this to index into the material buffer
 					MeshPushConstantBlock pushConstantBlock{};
 					// @todo: index
-					pushConstantBlock.meshIndex = node->index;
+					pushConstantBlock.meshIndex = node->mesh->index;
 					pushConstantBlock.materialIndex = primitive->material.index;
 					vkCmdPushConstants(commandBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPushConstantBlock), &pushConstantBlock);
 
@@ -453,8 +453,8 @@ public:
 				memcpy(meshData.jointMatrix, node->mesh->jointMatrix, sizeof(glm::mat4) * MAX_NUM_JOINTS);
 				meshData.jointcount = node->mesh->jointcount;
 				meshData.matrix = node->mesh->matrix;
+				shaderMeshData.push_back(meshData);
 			}
-			shaderMeshData.push_back(meshData);
 		}
 
 		if (shaderMeshDataBuffer.buffer != VK_NULL_HANDLE) {
@@ -489,6 +489,40 @@ public:
 		shaderMeshDataBuffer.descriptor.offset = 0;
 		shaderMeshDataBuffer.descriptor.range = bufferSize;
 		shaderMeshDataBuffer.device = device;
+	}
+
+	void updateMeshDataBuffer()
+	{
+		// @todo: optimize (no push, use fixed size)
+		std::vector<ShaderMeshData> shaderMeshData{};
+		for (auto& node : models.scene.linearNodes) {
+			ShaderMeshData meshData{};
+			if (node->mesh) {
+				memcpy(meshData.jointMatrix, node->mesh->jointMatrix, sizeof(glm::mat4) * MAX_NUM_JOINTS);
+				meshData.jointcount = node->mesh->jointcount;
+				meshData.matrix = node->mesh->matrix;
+				shaderMeshData.push_back(meshData);
+			}
+		}
+
+		VkDeviceSize bufferSize = shaderMeshData.size() * sizeof(ShaderMeshData);
+
+		if (!vulkanDevice->requiresStaging) {
+			memcpy(shaderMeshDataBuffer.mapped, shaderMeshData.data(), bufferSize);
+		}
+		else {
+			Buffer stagingBuffer;
+			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer.buffer, &stagingBuffer.memory, shaderMeshData.data()));
+			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
+			// Copy from staging buffers
+			VkCommandBuffer copyCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+			VkBufferCopy copyRegion{};
+			copyRegion.size = bufferSize;
+			vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMeshDataBuffer.buffer, 1, &copyRegion);
+			vulkanDevice->flushCommandBuffer(copyCmd, queue, true);
+			stagingBuffer.device = device;
+			stagingBuffer.destroy();
+		}
 	}
 
 	void loadScene(std::string filename)
@@ -2161,6 +2195,7 @@ public:
 					animationTimer -= models.scene.animations[animationIndex].end;
 				}
 				models.scene.updateAnimation(animationIndex, animationTimer);
+				updateMeshDataBuffer();
 			}
 			updateParams();
 		}

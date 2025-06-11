@@ -591,9 +591,7 @@ namespace vkglTF
 		if (mesh) {
 			glm::mat4 m = getMatrix();
 			if (skin) {
-				// @todo
-				/*
-				mesh->uniformBlock.matrix = m;
+				mesh->matrix = m;
 				// Update join matrices
 				glm::mat4 inverseTransform = glm::inverse(m);
 				size_t numJoints = std::min((uint32_t)skin->joints.size(), MAX_NUM_JOINTS);
@@ -601,9 +599,11 @@ namespace vkglTF
 					vkglTF::Node *jointNode = skin->joints[i];
 					glm::mat4 jointMat = jointNode->getMatrix() * skin->inverseBindMatrices[i];
 					jointMat = inverseTransform * jointMat;
-					mesh->uniformBlock.jointMatrix[i] = jointMat;
+					mesh->jointMatrix[i] = jointMat;
 				}
-				mesh->uniformBlock.jointcount = static_cast<uint32_t>(numJoints);
+				mesh->jointcount = static_cast<uint32_t>(numJoints);
+				/*
+				// @todo: Move buffer copy to main.cpp (decouple)
 				memcpy(mesh->uniformBuffer.mapped, &mesh->uniformBlock, sizeof(mesh->uniformBlock));
 				*/
 			} else {
@@ -1412,6 +1412,7 @@ namespace vkglTF
 			}
 			loadSkins(gltfModel);
 
+			uint32_t meshIndex = 0;
 			for (auto node : linearNodes) {
 				// Assign skins
 				if (node->skinIndex > -1) {
@@ -1419,6 +1420,7 @@ namespace vkglTF
 				}
 				// Initial pose
 				if (node->mesh) {
+					node->mesh->index = meshIndex++;
 					node->update();
 				}
 			}
