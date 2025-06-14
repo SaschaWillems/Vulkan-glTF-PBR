@@ -81,8 +81,8 @@ public:
 	struct DescriptorSetLayouts {
 		VkDescriptorSetLayout scene{ VK_NULL_HANDLE };
 		VkDescriptorSetLayout material{ VK_NULL_HANDLE };
-		VkDescriptorSetLayout node{ VK_NULL_HANDLE };
 		VkDescriptorSetLayout materialBuffer{ VK_NULL_HANDLE };
+		VkDescriptorSetLayout meshDataBuffer{ VK_NULL_HANDLE };
 	} descriptorSetLayouts;
 
 	struct DescriptorSets {
@@ -144,6 +144,20 @@ public:
 	Buffer shaderMaterialBuffer;
 	VkDescriptorSet descriptorSetMaterials{ VK_NULL_HANDLE };
 
+	struct MeshPushConstantBlock {
+		int32_t meshIndex;
+		int32_t materialIndex;
+	};
+
+	// We use a large buffer to store all per mesh data that needs to be passed to the shader
+	struct alignas(16) ShaderMeshData {
+		glm::mat4 matrix;
+		glm::mat4 jointMatrix[MAX_NUM_JOINTS]{};
+		uint32_t jointcount{ 0 };
+	};
+	std::vector<Buffer> shaderMeshDataBuffers;
+	std::vector<VkDescriptorSet> descriptorSetsMeshData;
+
 	std::map<std::string, std::string> environments;
 	std::string selectedEnvironment = "papermill";
 
@@ -181,7 +195,8 @@ public:
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.scene, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.material, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.node, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.materialBuffer, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.meshDataBuffer, nullptr);
 
 		models.scene.destroy(device);
 		models.skybox.destroy(device);
@@ -248,13 +263,18 @@ public:
 					const std::vector<VkDescriptorSet> descriptorsets = {
 						descriptorSets[cbIndex].scene,
 						primitive->material.descriptorSet,
-						node->mesh->uniformBuffer.descriptorSet,
+						// @todo: per frame-in-flight
+						descriptorSetsMeshData[cbIndex],
 						descriptorSetMaterials
 					};
 					vkCmdBindDescriptorSets(commandBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
 
 					// Pass material index for this primitive using a push constant, the shader uses this to index into the material buffer
-					vkCmdPushConstants(commandBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint32_t), &primitive->material.index);
+					MeshPushConstantBlock pushConstantBlock{};
+					// @todo: index
+					pushConstantBlock.meshIndex = node->mesh->index;
+					pushConstantBlock.materialIndex = primitive->material.index;
+					vkCmdPushConstants(commandBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MeshPushConstantBlock), &pushConstantBlock);
 
 					if (primitive->hasIndices) {
 						vkCmdDrawIndexed(commandBuffers[cbIndex], primitive->indexCount, 1, primitive->firstIndex, 0, 0);
@@ -419,6 +439,89 @@ public:
 		shaderMaterialBuffer.device = device;
 	}
 
+	// We place all the shader data blocks for all meshes (node) into a single buffer 
+	// This allows us to use one singular allocation instead of having to do lots of small allocations per mesh
+	// The vertex shader then get's the index into this buffer from a push constant set per mesh
+	// @todo: Needs to be adjusted to work with frames-in-flight (duplicate buffer)
+	// @todo: Update
+	void createMeshDataBuffer()
+	{
+		std::vector<ShaderMeshData> shaderMeshData{};
+		for (auto& node : models.scene.linearNodes) {
+			ShaderMeshData meshData{};
+			if (node->mesh) {
+				memcpy(meshData.jointMatrix, node->mesh->jointMatrix, sizeof(glm::mat4) * MAX_NUM_JOINTS);
+				meshData.jointcount = node->mesh->jointcount;
+				meshData.matrix = node->mesh->matrix;
+				shaderMeshData.push_back(meshData);
+			}
+		}
+
+		for (auto& shaderMeshDataBuffer : shaderMeshDataBuffers) {
+			if (shaderMeshDataBuffer.buffer != VK_NULL_HANDLE) {
+				shaderMeshDataBuffer.destroy();
+			}
+			VkDeviceSize bufferSize = shaderMeshData.size() * sizeof(ShaderMeshData);
+			if (!vulkanDevice->requiresStaging) {
+				// Prefer a host visible device buffer (ReBAR/SAM on discreate GPUs, always available on integrated GPUs)
+				VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
+				shaderMeshDataBuffer.device = device;
+				shaderMeshDataBuffer.map();
+				memcpy(shaderMeshDataBuffer.mapped, shaderMeshData.data(), bufferSize);
+			} else {
+				Buffer stagingBuffer;
+				VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer.buffer, &stagingBuffer.memory, shaderMeshData.data()));
+				VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
+				// Copy from staging buffers
+				VkCommandBuffer copyCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+				VkBufferCopy copyRegion{};
+				copyRegion.size = bufferSize;
+				vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMeshDataBuffer.buffer, 1, &copyRegion);
+				vulkanDevice->flushCommandBuffer(copyCmd, queue, true);
+				stagingBuffer.device = device;
+				stagingBuffer.destroy();
+			}
+			// Update descriptor
+			shaderMeshDataBuffer.descriptor.buffer = shaderMeshDataBuffer.buffer;
+			shaderMeshDataBuffer.descriptor.offset = 0;
+			shaderMeshDataBuffer.descriptor.range = bufferSize;
+			shaderMeshDataBuffer.device = device;
+		}
+	}
+
+	void updateMeshDataBuffer(uint32_t index)
+	{
+		// @todo: optimize (no push, use fixed size)
+		std::vector<ShaderMeshData> shaderMeshData{};
+		for (auto& node : models.scene.linearNodes) {
+			ShaderMeshData meshData{};
+			if (node->mesh) {
+				memcpy(meshData.jointMatrix, node->mesh->jointMatrix, sizeof(glm::mat4) * MAX_NUM_JOINTS);
+				meshData.jointcount = node->mesh->jointcount;
+				meshData.matrix = node->mesh->matrix;
+				shaderMeshData.push_back(meshData);
+			}
+		}
+
+		VkDeviceSize bufferSize = shaderMeshData.size() * sizeof(ShaderMeshData);
+
+		if (!vulkanDevice->requiresStaging) {
+			memcpy(shaderMeshDataBuffers[index].mapped, shaderMeshData.data(), bufferSize);
+		}
+		else {
+			Buffer stagingBuffer;
+			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer.buffer, &stagingBuffer.memory, shaderMeshData.data()));
+			// Copy from staging buffers
+			VkCommandBuffer copyCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+			VkBufferCopy copyRegion{};
+			copyRegion.size = bufferSize;
+			vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMeshDataBuffers[index].buffer, 1, &copyRegion);
+			vulkanDevice->flushCommandBuffer(copyCmd, queue, true);
+			stagingBuffer.device = device;
+			stagingBuffer.destroy();
+		}
+	}
+
 	void loadScene(std::string filename)
 	{
 		std::cout << "Loading scene from " << filename << std::endl;
@@ -428,6 +531,7 @@ public:
 		auto tStart = std::chrono::high_resolution_clock::now();
 		models.scene.loadFromFile(filename, vulkanDevice, queue);
 		createMaterialBuffer();
+		createMeshDataBuffer();
 		auto tFileLoad = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - tStart).count();
 		std::cout << "Loading took " << tFileLoad << " ms" << std::endl;
 		// Check and list unsupported extensions
@@ -496,30 +600,6 @@ public:
 		loadEnvironment(envMapFile.c_str());
 	}
 
-	void setupNodeDescriptorSet(vkglTF::Node *node) {
-		if (node->mesh) {
-			VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
-			descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			descriptorSetAllocInfo.descriptorPool = descriptorPool;
-			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.node;
-			descriptorSetAllocInfo.descriptorSetCount = 1;
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &node->mesh->uniformBuffer.descriptorSet));
-
-			VkWriteDescriptorSet writeDescriptorSet{};
-			writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			writeDescriptorSet.descriptorCount = 1;
-			writeDescriptorSet.dstSet = node->mesh->uniformBuffer.descriptorSet;
-			writeDescriptorSet.dstBinding = 0;
-			writeDescriptorSet.pBufferInfo = &node->mesh->uniformBuffer.descriptor;
-
-			vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
-		}
-		for (auto& child : node->children) {
-			setupNodeDescriptorSet(child);
-		}
-	}
-
 	void setupDescriptors()
 	{
 		/*
@@ -548,8 +628,8 @@ public:
 		std::vector<VkDescriptorPoolSize> poolSizes = {
 			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, (4 + meshCount) * swapChain.imageCount },
 			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount * swapChain.imageCount },
-			// One SSBO for the shader material buffer
-			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 } 
+			// One SSBO for the shader material buffer and one SSBO for the mesh data buffer
+			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 + static_cast<uint32_t>(shaderMeshDataBuffers.size())}
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -690,24 +770,7 @@ public:
 				vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
 			}
 
-			// Model node (matrices)
-			{
-				std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-					{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
-				};
-				VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
-				descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-				descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
-				descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-				VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.node));
-
-				// Per-Node descriptor set
-				for (auto &node : models.scene.nodes) {
-					setupNodeDescriptorSet(node);
-				}
-			}
-
-			// Material Buffer
+			// Material buffer
 			{
 				std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
 					{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
@@ -735,6 +798,35 @@ public:
 				vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
 			}
 
+			// Mesh data buffer
+			{
+				std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+					{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
+				};
+				VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+				descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
+				descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+				VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.meshDataBuffer));
+
+				for (auto i = 0; i < descriptorSetsMeshData.size(); i++) {
+					VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+					descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+					descriptorSetAllocInfo.descriptorPool = descriptorPool;
+					descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.meshDataBuffer;
+					descriptorSetAllocInfo.descriptorSetCount = 1;
+					VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSetsMeshData[i]));
+
+					VkWriteDescriptorSet writeDescriptorSet{};
+					writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+					writeDescriptorSet.descriptorCount = 1;
+					writeDescriptorSet.dstSet = descriptorSetsMeshData[i];
+					writeDescriptorSet.dstBinding = 0;
+					writeDescriptorSet.pBufferInfo = &shaderMeshDataBuffers[i].descriptor;
+					vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+				}
+			}
 		}
 
 		// Skybox (fixed set)
@@ -827,15 +919,15 @@ public:
 
 		// Pipeline layout
 		const std::vector<VkDescriptorSetLayout> setLayouts = {
-			descriptorSetLayouts.scene, descriptorSetLayouts.material, descriptorSetLayouts.node, descriptorSetLayouts.materialBuffer
+			descriptorSetLayouts.scene, descriptorSetLayouts.material, descriptorSetLayouts.meshDataBuffer, descriptorSetLayouts.materialBuffer
 		};
 		VkPipelineLayoutCreateInfo pipelineLayoutCI{};
 		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutCI.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
 		pipelineLayoutCI.pSetLayouts = setLayouts.data();
 		VkPushConstantRange pushConstantRange{};
-		pushConstantRange.size = sizeof(uint32_t);
-		pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		pushConstantRange.size = sizeof(MeshPushConstantBlock);
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 		pipelineLayoutCI.pushConstantRangeCount = 1;
 		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
@@ -1747,10 +1839,10 @@ public:
 			uniformBuffer.skybox.create(vulkanDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(shaderValuesSkybox));
 			uniformBuffer.params.create(vulkanDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(shaderValuesParams));
 		}
-		updateUniformBuffers();
+		updateUniformData();
 	}
 
-	void updateUniformBuffers()
+	void updateUniformData()
 	{
 		// Scene
 		shaderValuesScene.projection = camera.matrices.perspective;
@@ -1789,7 +1881,7 @@ public:
 	void windowResized()
 	{
 		vkDeviceWaitIdle(device);
-		updateUniformBuffers();
+		updateUniformData();
 		updateOverlay();
 	}
 
@@ -1808,9 +1900,11 @@ public:
 		waitFences.resize(renderAhead);
 		presentCompleteSemaphores.resize(swapChain.imageCount);
 		renderCompleteSemaphores.resize(swapChain.imageCount);
-		commandBuffers.resize(swapChain.imageCount);
-		uniformBuffers.resize(swapChain.imageCount);
-		descriptorSets.resize(swapChain.imageCount);
+		commandBuffers.resize(renderAhead);
+		uniformBuffers.resize(renderAhead);
+		descriptorSets.resize(renderAhead);
+		shaderMeshDataBuffers.resize(renderAhead);
+		descriptorSetsMeshData.resize(renderAhead);
 		// Command buffer execution fences
 		for (auto &waitFence : waitFences) {
 			VkFenceCreateInfo fenceCI{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, VK_FENCE_CREATE_SIGNALED_BIT };
@@ -2062,7 +2156,7 @@ public:
 		recordCommandBuffer();
 
 		// Update UBOs
-		updateUniformBuffers();
+		updateUniformData();
 		UniformBufferSet currentUB = uniformBuffers[currentFrame];
 		memcpy(currentUB.scene.mapped, &shaderValuesScene, sizeof(shaderValuesScene));
 		memcpy(currentUB.params.mapped, &shaderValuesParams, sizeof(shaderValuesParams));
@@ -2091,9 +2185,6 @@ public:
 			}
 		}
 
-		currentFrame = (currentFrame + 1) % renderAhead;
-		currentSemaphore = (currentSemaphore + 1) % swapChain.imageCount;
-
 		if (!paused) {
 			if ((animate) && (models.scene.animations.size() > 0)) {
 				animationTimer += frameTimer;
@@ -2101,12 +2192,13 @@ public:
 					animationTimer -= models.scene.animations[animationIndex].end;
 				}
 				models.scene.updateAnimation(animationIndex, animationTimer);
+				updateMeshDataBuffer(currentFrame);
 			}
 			updateParams();
 		}
-		if (camera.updated) {
-			updateUniformBuffers();
-		}
+
+		currentFrame = (currentFrame + 1) % renderAhead;
+		currentSemaphore = (currentSemaphore + 1) % swapChain.imageCount;
 	}
 
 	virtual void fileDropped(std::string filename)

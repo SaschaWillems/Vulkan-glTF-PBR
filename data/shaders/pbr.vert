@@ -1,4 +1,4 @@
-/* Copyright (c) 2018-2023, Sascha Willems
+/* Copyright (c) 2018-2025, Sascha Willems
  *
  * SPDX-License-Identifier: MIT
  *
@@ -24,11 +24,21 @@ layout (set = 0, binding = 0) uniform UBO
 
 #define MAX_NUM_JOINTS 128
 
-layout (set = 2, binding = 0) uniform UBONode {
+struct MeshShaderDataBlock {
 	mat4 matrix;
 	mat4 jointMatrix[MAX_NUM_JOINTS];
 	uint jointCount;
-} node;
+};
+
+layout(std430, set = 2, binding = 0) readonly buffer SSBO
+{
+   MeshShaderDataBlock meshData[];
+};
+
+layout (push_constant) uniform PushConstants {
+	int meshIndex;
+	int materialIndex;
+} pushConstants;
 
 layout (location = 0) out vec3 outWorldPos;
 layout (location = 1) out vec3 outNormal;
@@ -41,19 +51,19 @@ void main()
 	outColor0 = inColor0;
 
 	vec4 locPos;
-	if (node.jointCount > 0) {
+	if (meshData[pushConstants.meshIndex].jointCount > 0) {
 		// Mesh is skinned
 		mat4 skinMat = 
-			inWeight0.x * node.jointMatrix[inJoint0.x] +
-			inWeight0.y * node.jointMatrix[inJoint0.y] +
-			inWeight0.z * node.jointMatrix[inJoint0.z] +
-			inWeight0.w * node.jointMatrix[inJoint0.w];
+			inWeight0.x * meshData[pushConstants.meshIndex].jointMatrix[inJoint0.x] +
+			inWeight0.y * meshData[pushConstants.meshIndex].jointMatrix[inJoint0.y] +
+			inWeight0.z * meshData[pushConstants.meshIndex].jointMatrix[inJoint0.z] +
+			inWeight0.w * meshData[pushConstants.meshIndex].jointMatrix[inJoint0.w];
 
-		locPos = ubo.model * node.matrix * skinMat * vec4(inPos, 1.0);
-		outNormal = normalize(transpose(inverse(mat3(ubo.model * node.matrix * skinMat))) * inNormal);
+		locPos = ubo.model * meshData[pushConstants.meshIndex].matrix * skinMat * vec4(inPos, 1.0);
+		outNormal = normalize(transpose(inverse(mat3(ubo.model * meshData[pushConstants.meshIndex].matrix * skinMat))) * inNormal);
 	} else {
-		locPos = ubo.model * node.matrix * vec4(inPos, 1.0);
-		outNormal = normalize(transpose(inverse(mat3(ubo.model * node.matrix))) * inNormal);
+		locPos = ubo.model * meshData[pushConstants.meshIndex].matrix * vec4(inPos, 1.0);
+		outNormal = normalize(transpose(inverse(mat3(ubo.model * meshData[pushConstants.meshIndex].matrix))) * inNormal);
 	}
 	locPos.y = -locPos.y;
 	outWorldPos = locPos.xyz / locPos.w;
