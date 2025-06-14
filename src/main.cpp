@@ -155,8 +155,8 @@ public:
 		glm::mat4 jointMatrix[MAX_NUM_JOINTS]{};
 		uint32_t jointcount{ 0 };
 	};
-	Buffer shaderMeshDataBuffer;
-	VkDescriptorSet descriptorSetMeshData{ VK_NULL_HANDLE };
+	std::vector<Buffer> shaderMeshDataBuffers;
+	std::vector<VkDescriptorSet> descriptorSetsMeshData;
 
 	std::map<std::string, std::string> environments;
 	std::string selectedEnvironment = "papermill";
@@ -264,7 +264,7 @@ public:
 						descriptorSets[cbIndex].scene,
 						primitive->material.descriptorSet,
 						// @todo: per frame-in-flight
-						descriptorSetMeshData,
+						descriptorSetsMeshData[cbIndex],
 						descriptorSetMaterials
 					};
 					vkCmdBindDescriptorSets(commandBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
@@ -457,41 +457,39 @@ public:
 			}
 		}
 
-		if (shaderMeshDataBuffer.buffer != VK_NULL_HANDLE) {
-			shaderMeshDataBuffer.destroy();
-		}
-
-		VkDeviceSize bufferSize = shaderMeshData.size() * sizeof(ShaderMeshData);
-
-		if (!vulkanDevice->requiresStaging) {
-			// Prefer a host visible device buffer (ReBAR/SAM on discreate GPUs, always available on integrated GPUs)
-			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
+		for (auto& shaderMeshDataBuffer : shaderMeshDataBuffers) {
+			if (shaderMeshDataBuffer.buffer != VK_NULL_HANDLE) {
+				shaderMeshDataBuffer.destroy();
+			}
+			VkDeviceSize bufferSize = shaderMeshData.size() * sizeof(ShaderMeshData);
+			if (!vulkanDevice->requiresStaging) {
+				// Prefer a host visible device buffer (ReBAR/SAM on discreate GPUs, always available on integrated GPUs)
+				VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
+				shaderMeshDataBuffer.device = device;
+				shaderMeshDataBuffer.map();
+				memcpy(shaderMeshDataBuffer.mapped, shaderMeshData.data(), bufferSize);
+			} else {
+				Buffer stagingBuffer;
+				VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer.buffer, &stagingBuffer.memory, shaderMeshData.data()));
+				VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
+				// Copy from staging buffers
+				VkCommandBuffer copyCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+				VkBufferCopy copyRegion{};
+				copyRegion.size = bufferSize;
+				vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMeshDataBuffer.buffer, 1, &copyRegion);
+				vulkanDevice->flushCommandBuffer(copyCmd, queue, true);
+				stagingBuffer.device = device;
+				stagingBuffer.destroy();
+			}
+			// Update descriptor
+			shaderMeshDataBuffer.descriptor.buffer = shaderMeshDataBuffer.buffer;
+			shaderMeshDataBuffer.descriptor.offset = 0;
+			shaderMeshDataBuffer.descriptor.range = bufferSize;
 			shaderMeshDataBuffer.device = device;
-			shaderMeshDataBuffer.map();
-			memcpy(shaderMeshDataBuffer.mapped, shaderMeshData.data(), bufferSize);
 		}
-		else {
-			Buffer stagingBuffer;
-			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer.buffer, &stagingBuffer.memory, shaderMeshData.data()));
-			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
-			// Copy from staging buffers
-			VkCommandBuffer copyCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-			VkBufferCopy copyRegion{};
-			copyRegion.size = bufferSize;
-			vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMeshDataBuffer.buffer, 1, &copyRegion);
-			vulkanDevice->flushCommandBuffer(copyCmd, queue, true);
-			stagingBuffer.device = device;
-			stagingBuffer.destroy();
-		}
-
-		// Update descriptor
-		shaderMeshDataBuffer.descriptor.buffer = shaderMeshDataBuffer.buffer;
-		shaderMeshDataBuffer.descriptor.offset = 0;
-		shaderMeshDataBuffer.descriptor.range = bufferSize;
-		shaderMeshDataBuffer.device = device;
 	}
 
-	void updateMeshDataBuffer()
+	void updateMeshDataBuffer(uint32_t index)
 	{
 		// @todo: optimize (no push, use fixed size)
 		std::vector<ShaderMeshData> shaderMeshData{};
@@ -508,17 +506,16 @@ public:
 		VkDeviceSize bufferSize = shaderMeshData.size() * sizeof(ShaderMeshData);
 
 		if (!vulkanDevice->requiresStaging) {
-			memcpy(shaderMeshDataBuffer.mapped, shaderMeshData.data(), bufferSize);
+			memcpy(shaderMeshDataBuffers[index].mapped, shaderMeshData.data(), bufferSize);
 		}
 		else {
 			Buffer stagingBuffer;
 			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &stagingBuffer.buffer, &stagingBuffer.memory, shaderMeshData.data()));
-			VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
 			// Copy from staging buffers
 			VkCommandBuffer copyCmd = vulkanDevice->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 			VkBufferCopy copyRegion{};
 			copyRegion.size = bufferSize;
-			vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMeshDataBuffer.buffer, 1, &copyRegion);
+			vkCmdCopyBuffer(copyCmd, stagingBuffer.buffer, shaderMeshDataBuffers[index].buffer, 1, &copyRegion);
 			vulkanDevice->flushCommandBuffer(copyCmd, queue, true);
 			stagingBuffer.device = device;
 			stagingBuffer.destroy();
@@ -632,8 +629,7 @@ public:
 			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, (4 + meshCount) * swapChain.imageCount },
 			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount * swapChain.imageCount },
 			// One SSBO for the shader material buffer and one SSBO for the mesh data buffer
-			// @todo: frames in flight
-			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 } 
+			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 + static_cast<uint32_t>(shaderMeshDataBuffers.size())}
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -813,21 +809,23 @@ public:
 				descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
 				VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.meshDataBuffer));
 
-				VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
-				descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-				descriptorSetAllocInfo.descriptorPool = descriptorPool;
-				descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.meshDataBuffer;
-				descriptorSetAllocInfo.descriptorSetCount = 1;
-				VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSetMeshData));
+				for (auto i = 0; i < descriptorSetsMeshData.size(); i++) {
+					VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+					descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+					descriptorSetAllocInfo.descriptorPool = descriptorPool;
+					descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.meshDataBuffer;
+					descriptorSetAllocInfo.descriptorSetCount = 1;
+					VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSetsMeshData[i]));
 
-				VkWriteDescriptorSet writeDescriptorSet{};
-				writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				writeDescriptorSet.descriptorCount = 1;
-				writeDescriptorSet.dstSet = descriptorSetMeshData;
-				writeDescriptorSet.dstBinding = 0;
-				writeDescriptorSet.pBufferInfo = &shaderMeshDataBuffer.descriptor;
-				vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+					VkWriteDescriptorSet writeDescriptorSet{};
+					writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+					writeDescriptorSet.descriptorCount = 1;
+					writeDescriptorSet.dstSet = descriptorSetsMeshData[i];
+					writeDescriptorSet.dstBinding = 0;
+					writeDescriptorSet.pBufferInfo = &shaderMeshDataBuffers[i].descriptor;
+					vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+				}
 			}
 		}
 
@@ -1841,10 +1839,10 @@ public:
 			uniformBuffer.skybox.create(vulkanDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(shaderValuesSkybox));
 			uniformBuffer.params.create(vulkanDevice, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(shaderValuesParams));
 		}
-		updateUniformBuffers();
+		updateUniformData();
 	}
 
-	void updateUniformBuffers()
+	void updateUniformData()
 	{
 		// Scene
 		shaderValuesScene.projection = camera.matrices.perspective;
@@ -1883,7 +1881,7 @@ public:
 	void windowResized()
 	{
 		vkDeviceWaitIdle(device);
-		updateUniformBuffers();
+		updateUniformData();
 		updateOverlay();
 	}
 
@@ -1902,9 +1900,11 @@ public:
 		waitFences.resize(renderAhead);
 		presentCompleteSemaphores.resize(swapChain.imageCount);
 		renderCompleteSemaphores.resize(swapChain.imageCount);
-		commandBuffers.resize(swapChain.imageCount);
-		uniformBuffers.resize(swapChain.imageCount);
-		descriptorSets.resize(swapChain.imageCount);
+		commandBuffers.resize(renderAhead);
+		uniformBuffers.resize(renderAhead);
+		descriptorSets.resize(renderAhead);
+		shaderMeshDataBuffers.resize(renderAhead);
+		descriptorSetsMeshData.resize(renderAhead);
 		// Command buffer execution fences
 		for (auto &waitFence : waitFences) {
 			VkFenceCreateInfo fenceCI{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, VK_FENCE_CREATE_SIGNALED_BIT };
@@ -2156,7 +2156,7 @@ public:
 		recordCommandBuffer();
 
 		// Update UBOs
-		updateUniformBuffers();
+		updateUniformData();
 		UniformBufferSet currentUB = uniformBuffers[currentFrame];
 		memcpy(currentUB.scene.mapped, &shaderValuesScene, sizeof(shaderValuesScene));
 		memcpy(currentUB.params.mapped, &shaderValuesParams, sizeof(shaderValuesParams));
@@ -2185,9 +2185,6 @@ public:
 			}
 		}
 
-		currentFrame = (currentFrame + 1) % renderAhead;
-		currentSemaphore = (currentSemaphore + 1) % swapChain.imageCount;
-
 		if (!paused) {
 			if ((animate) && (models.scene.animations.size() > 0)) {
 				animationTimer += frameTimer;
@@ -2195,13 +2192,13 @@ public:
 					animationTimer -= models.scene.animations[animationIndex].end;
 				}
 				models.scene.updateAnimation(animationIndex, animationTimer);
-				updateMeshDataBuffer();
+				updateMeshDataBuffer(currentFrame);
 			}
 			updateParams();
 		}
-		if (camera.updated) {
-			updateUniformBuffers();
-		}
+
+		currentFrame = (currentFrame + 1) % renderAhead;
+		currentSemaphore = (currentSemaphore + 1) % swapChain.imageCount;
 	}
 
 	virtual void fileDropped(std::string filename)
