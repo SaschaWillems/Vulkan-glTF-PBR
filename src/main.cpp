@@ -99,8 +99,7 @@ public:
 	std::vector<VkSemaphore> presentCompleteSemaphores;
 
 	const uint32_t renderAhead = 2;
-	uint32_t currentFrame = 0;
-	uint32_t currentSemaphore = 0;
+	uint32_t frameIndex = 0;
 
 	int32_t animationIndex = 0;
 	float animationTimer = 0.0f;
@@ -292,7 +291,7 @@ public:
 
 	void recordCommandBuffer()
 	{
-		vkResetCommandBuffer(commandBuffers[currentFrame], 0);
+		vkResetCommandBuffer(commandBuffers[frameIndex], 0);
 
 		VkCommandBufferBeginInfo cmdBufferBeginInfo{};
 		cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -319,7 +318,7 @@ public:
 		renderPassBeginInfo.pClearValues = clearValues;
 		renderPassBeginInfo.framebuffer = frameBuffers[imageIndex];
 
-		VkCommandBuffer currentCB = commandBuffers[currentFrame];
+		VkCommandBuffer currentCB = commandBuffers[frameIndex];
 
 		VK_CHECK_RESULT(vkBeginCommandBuffer(currentCB, &cmdBufferBeginInfo));
 		vkCmdBeginRenderPass(currentCB, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -338,7 +337,7 @@ public:
 		VkDeviceSize offsets[1] = { 0 };
 
 		if (displayBackground) {
-			vkCmdBindDescriptorSets(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame].skybox, 0, nullptr);
+			vkCmdBindDescriptorSets(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[frameIndex].skybox, 0, nullptr);
 			vkCmdBindPipeline(currentCB, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines["skybox"]);
 			models.skybox.draw(currentCB);
 		}
@@ -354,16 +353,16 @@ public:
 
 		// Opaque primitives first
 		for (auto node : model.nodes) {
-			renderNode(node, currentFrame, vkglTF::Material::ALPHAMODE_OPAQUE);
+			renderNode(node, frameIndex, vkglTF::Material::ALPHAMODE_OPAQUE);
 		}
 		// Alpha masked primitives
 		for (auto node : model.nodes) {
-			renderNode(node, currentFrame, vkglTF::Material::ALPHAMODE_MASK);
+			renderNode(node, frameIndex, vkglTF::Material::ALPHAMODE_MASK);
 		}
 		// Transparent primitives
 		// TODO: Correct depth sorting
 		for (auto node : model.nodes) {
-			renderNode(node, currentFrame, vkglTF::Material::ALPHAMODE_BLEND);
+			renderNode(node, frameIndex, vkglTF::Material::ALPHAMODE_BLEND);
 		}
 
 		// User interface
@@ -2142,10 +2141,10 @@ public:
 		}
 #endif
 
-		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX));
-		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));
+		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[frameIndex], VK_TRUE, UINT64_MAX));
+		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[frameIndex]));
 
-		VkResult acquire = swapChain.acquireNextImage(presentCompleteSemaphores[currentSemaphore], &imageIndex);
+		VkResult acquire = swapChain.acquireNextImage(presentCompleteSemaphores[frameIndex], &imageIndex);
 		if ((acquire == VK_ERROR_OUT_OF_DATE_KHR) || (acquire == VK_SUBOPTIMAL_KHR)) {
 			windowResize();
 		}
@@ -2157,7 +2156,7 @@ public:
 
 		// Update UBOs
 		updateUniformData();
-		UniformBufferSet currentUB = uniformBuffers[currentFrame];
+		UniformBufferSet currentUB = uniformBuffers[frameIndex];
 		memcpy(currentUB.scene.mapped, &shaderValuesScene, sizeof(shaderValuesScene));
 		memcpy(currentUB.params.mapped, &shaderValuesParams, sizeof(shaderValuesParams));
 		memcpy(currentUB.skybox.mapped, &shaderValuesSkybox, sizeof(shaderValuesSkybox));
@@ -2166,15 +2165,15 @@ public:
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.pWaitDstStageMask = &waitDstStageMask;
-		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[currentSemaphore];
+		submitInfo.pWaitSemaphores = &presentCompleteSemaphores[frameIndex];
 		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentSemaphore];
+		submitInfo.pSignalSemaphores = &renderCompleteSemaphores[imageIndex];
 		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
+		submitInfo.pCommandBuffers = &commandBuffers[frameIndex];
 		submitInfo.commandBufferCount = 1;
-		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentFrame]));
+		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[frameIndex]));
 
-		VkResult present = swapChain.queuePresent(queue, imageIndex, renderCompleteSemaphores[currentSemaphore]);
+		VkResult present = swapChain.queuePresent(queue, imageIndex, renderCompleteSemaphores[imageIndex]);
 		if (!((present == VK_SUCCESS) || (present == VK_SUBOPTIMAL_KHR))) {
 			if (present == VK_ERROR_OUT_OF_DATE_KHR) {
 				windowResize();
@@ -2192,13 +2191,12 @@ public:
 					animationTimer -= models.scene.animations[animationIndex].end;
 				}
 				models.scene.updateAnimation(animationIndex, animationTimer);
-				updateMeshDataBuffer(currentFrame);
+				updateMeshDataBuffer(frameIndex);
 			}
 			updateParams();
 		}
 
-		currentFrame = (currentFrame + 1) % renderAhead;
-		currentSemaphore = (currentSemaphore + 1) % swapChain.imageCount;
+		frameIndex = (frameIndex + 1) % renderAhead;
 	}
 
 	virtual void fileDropped(std::string filename)
