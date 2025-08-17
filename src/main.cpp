@@ -464,7 +464,7 @@ public:
 			VkDeviceSize bufferSize = shaderMeshData.size() * sizeof(ShaderMeshData);
 			if (!vulkanDevice->requiresStaging) {
 				// Prefer a host visible device buffer (ReBAR/SAM on discreate GPUs, always available on integrated GPUs)
-				VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
+				VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, &shaderMeshDataBuffer.buffer, &shaderMeshDataBuffer.memory));
 				shaderMeshDataBuffer.device = device;
 				shaderMeshDataBuffer.map();
 				memcpy(shaderMeshDataBuffer.mapped, shaderMeshData.data(), bufferSize);
@@ -801,7 +801,7 @@ public:
 			// Mesh data buffer
 			{
 				std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-					{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
+					{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
 				};
 				VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
 				descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -819,7 +819,7 @@ public:
 
 					VkWriteDescriptorSet writeDescriptorSet{};
 					writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+					writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 					writeDescriptorSet.descriptorCount = 1;
 					writeDescriptorSet.dstSet = descriptorSetsMeshData[i];
 					writeDescriptorSet.dstBinding = 0;
