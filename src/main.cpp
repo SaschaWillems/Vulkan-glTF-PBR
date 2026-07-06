@@ -1,7 +1,7 @@
 /*
  * Vulkan physical based rendering glTF 2.0 renderer
  *
- * Copyright (C) 2018-2025 by Sascha Willems - www.saschawillems.de
+ * Copyright (C) 2018-2026 by Sascha Willems - www.saschawillems.de
  *
  * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
  */
@@ -865,7 +865,7 @@ public:
 	}
 
 	// Depending on material setting, we need different pipeline variants per set, e.g. one with back-face culling, one without and one with alpha-blending enabled. This function generates such a set.
-	void addPipelineSet(const std::string prefix, const std::string vertexShader, const std::string fragmentShader)
+	void addPipelineSet(const std::string prefix, const std::string vertexShader, const std::string fragmentShader, bool slang = false)
 	{
 		VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCI{};
 		inputAssemblyStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -968,8 +968,13 @@ public:
 		pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
 		pipelineCI.pStages = shaderStages.data();
 
-		shaderStages[0] = loadShader(device, vertexShader, VK_SHADER_STAGE_VERTEX_BIT);
-		shaderStages[1] = loadShader(device, fragmentShader, VK_SHADER_STAGE_FRAGMENT_BIT);
+		if (slang) {
+			shaderStages[0] = loadSlangShader(device, vertexShader, "vertexMain", VK_SHADER_STAGE_VERTEX_BIT);
+			shaderStages[1] = loadSlangShader(device, fragmentShader, "fragmentMain", VK_SHADER_STAGE_FRAGMENT_BIT);
+		} else {
+			shaderStages[0] = loadShader(device, vertexShader, VK_SHADER_STAGE_VERTEX_BIT);
+			shaderStages[1] = loadShader(device, fragmentShader, VK_SHADER_STAGE_FRAGMENT_BIT);
+		}
 
 		VkPipeline pipeline{};
 		// Default pipeline with back-face culling
@@ -1002,7 +1007,8 @@ public:
 		// Skybox pipeline (background cube)
 		addPipelineSet("skybox", "skybox.vert.spv", "skybox.frag.spv");
 		// PBR pipelines
-		addPipelineSet("pbr", "pbr.vert.spv", "material_pbr.frag.spv");
+		addPipelineSet("pbr", "pbr_full.slang", "pbr_full.slang", true);
+//		addPipelineSet("pbr", "pbr.vert.spv", "material_pbr.frag.spv");
 		// KHR_materials_unlit
 		addPipelineSet("unlit", "pbr.vert.spv", "material_unlit.frag.spv");
 	}

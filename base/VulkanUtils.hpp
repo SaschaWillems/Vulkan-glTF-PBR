@@ -11,10 +11,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <fstream>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <map>
+#include <vector>
 #include "vulkan/vulkan.h"
+#include <slang/slang.h>
+#include <slang/slang-com-ptr.h>
 #include "VulkanDevice.hpp"
 #if defined(__ANDROID__)
 #include <android/asset_manager.h>
@@ -115,6 +119,129 @@ VkPipelineShaderStageCreateInfo loadShader(VkDevice device, std::string filename
 	}
 
 #endif
+	assert(shaderStage.module != VK_NULL_HANDLE);
+	return shaderStage;
+}
+
+VkPipelineShaderStageCreateInfo loadSlangShader(VkDevice device, const std::string& filename, const std::string& entryPointName, VkShaderStageFlagBits stage)
+{
+	VkPipelineShaderStageCreateInfo shaderStage{};
+	shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shaderStage.stage = stage;
+	shaderStage.pName = "main";
+
+#if defined(VK_USE_PLATFORM_ANDROID_KHR)
+	std::cerr << "Error: Runtime Slang compilation is not supported on Android builds" << std::endl;
+	shaderStage.module = VK_NULL_HANDLE;
+#else
+	auto printSlangDiagnostics = [](slang::IBlob* diagnosticsBlob) {
+		if (diagnosticsBlob) {
+			std::cerr << static_cast<const char*>(diagnosticsBlob->getBufferPointer()) << std::endl;
+		}
+	};
+
+	std::filesystem::path shaderPath = std::filesystem::path(VK_EXAMPLE_DATA_DIR) / "shaders" / filename;
+	std::ifstream is(shaderPath, std::ios::binary | std::ios::in);
+	if (!is.is_open()) {
+		std::cerr << "Error: Could not open Slang shader file \"" << shaderPath.string() << "\"" << std::endl;
+		shaderStage.module = VK_NULL_HANDLE;
+	}
+	else {
+		std::string shaderSource((std::istreambuf_iterator<char>(is)), std::istreambuf_iterator<char>());
+		is.close();
+
+		Slang::ComPtr<slang::IGlobalSession> globalSession;
+		Slang::ComPtr<slang::ISession> session;
+		Slang::ComPtr<slang::IModule> shaderModule;
+		Slang::ComPtr<slang::IEntryPoint> entryPoint;
+		Slang::ComPtr<slang::IComponentType> composedProgram;
+		Slang::ComPtr<slang::IComponentType> linkedProgram;
+		Slang::ComPtr<slang::IBlob> spirvCode;
+		Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+
+		if (SLANG_FAILED(createGlobalSession(globalSession.writeRef()))) {
+			std::cerr << "Error: Failed to create Slang global session" << std::endl;
+			shaderStage.module = VK_NULL_HANDLE;
+		}
+		else {
+			slang::TargetDesc targetDesc = {};
+			targetDesc.format = SLANG_SPIRV;
+			targetDesc.profile = globalSession->findProfile("spirv_1_5");
+
+			slang::CompilerOptionEntry optionEntry = {
+				slang::CompilerOptionName::EmitSpirvDirectly,
+				{slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}
+			};
+
+			slang::SessionDesc sessionDesc = {};
+			sessionDesc.targets = &targetDesc;
+			sessionDesc.targetCount = 1;
+			sessionDesc.compilerOptionEntries = &optionEntry;
+			sessionDesc.compilerOptionEntryCount = 1;
+			sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+
+			if (SLANG_FAILED(globalSession->createSession(sessionDesc, session.writeRef()))) {
+				std::cerr << "Error: Failed to create Slang compilation session" << std::endl;
+				shaderStage.module = VK_NULL_HANDLE;
+			}
+			else {
+				shaderModule = session->loadModuleFromSourceString(
+					shaderPath.stem().string().c_str(),
+					shaderPath.string().c_str(),
+					shaderSource.c_str(),
+					diagnosticsBlob.writeRef());
+				printSlangDiagnostics(diagnosticsBlob);
+				diagnosticsBlob = nullptr;
+				if (!shaderModule) {
+					std::cerr << "Error: Failed to load Slang module \"" << filename << "\"" << std::endl;
+					shaderStage.module = VK_NULL_HANDLE;
+				}
+				else {
+					shaderModule->findEntryPointByName(entryPointName.c_str(), entryPoint.writeRef());
+					if (!entryPoint) {
+						std::cerr << "Error: Failed to find Slang entry point \"" << entryPointName << "\" in \"" << filename << "\"" << std::endl;
+						shaderStage.module = VK_NULL_HANDLE;
+					}
+					else {
+						slang::IComponentType* componentTypes[] = { shaderModule, entryPoint };
+						SlangResult result = session->createCompositeComponentType(componentTypes, 2, composedProgram.writeRef(), diagnosticsBlob.writeRef());
+						printSlangDiagnostics(diagnosticsBlob);
+						diagnosticsBlob = nullptr;
+						if (SLANG_FAILED(result)) {
+							std::cerr << "Error: Failed to compose Slang shader program" << std::endl;
+							shaderStage.module = VK_NULL_HANDLE;
+						}
+						else {
+							result = composedProgram->link(linkedProgram.writeRef(), diagnosticsBlob.writeRef());
+							printSlangDiagnostics(diagnosticsBlob);
+							diagnosticsBlob = nullptr;
+							if (SLANG_FAILED(result)) {
+								std::cerr << "Error: Failed to link Slang shader program" << std::endl;
+								shaderStage.module = VK_NULL_HANDLE;
+							}
+							else {
+								result = linkedProgram->getEntryPointCode(0, 0, spirvCode.writeRef(), diagnosticsBlob.writeRef());
+								printSlangDiagnostics(diagnosticsBlob);
+								if (SLANG_FAILED(result) || !spirvCode || spirvCode->getBufferSize() == 0) {
+									std::cerr << "Error: Failed to compile Slang shader \"" << filename << "\" to SPIR-V" << std::endl;
+									shaderStage.module = VK_NULL_HANDLE;
+								}
+								else {
+									VkShaderModuleCreateInfo moduleCreateInfo{};
+									moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+									moduleCreateInfo.codeSize = spirvCode->getBufferSize();
+									moduleCreateInfo.pCode = reinterpret_cast<const uint32_t*>(spirvCode->getBufferPointer());
+									VK_CHECK_RESULT(vkCreateShaderModule(device, &moduleCreateInfo, nullptr, &shaderStage.module));
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+#endif
+
 	assert(shaderStage.module != VK_NULL_HANDLE);
 	return shaderStage;
 }
