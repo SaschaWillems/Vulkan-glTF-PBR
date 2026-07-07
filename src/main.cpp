@@ -1005,12 +1005,11 @@ public:
 	void preparePipelines()
 	{
 		// Skybox pipeline (background cube)
-		addPipelineSet("skybox", "skybox.vert.spv", "skybox.frag.spv");
+		addPipelineSet("skybox", "skybox.slang", "skybox.slang", true);
 		// PBR pipelines
 		addPipelineSet("pbr", "pbr_full.slang", "pbr_full.slang", true);
-//		addPipelineSet("pbr", "pbr.vert.spv", "material_pbr.frag.spv");
 		// KHR_materials_unlit
-		addPipelineSet("unlit", "pbr.vert.spv", "material_unlit.frag.spv");
+		addPipelineSet("unlit", "pbr.slang", "material_unlit.slang", true);
 	}
 
 	/*
