@@ -37,6 +37,17 @@ ENDIF()
 message(STATUS "Using module to find Vulkan")
 find_package(Vulkan)
 
+find_path(SLANG_INCLUDE_DIR NAMES slang/slang.h HINTS "$ENV{VULKAN_SDK}/Include")
+find_library(SLANG_LIBRARY NAMES slang HINTS "$ENV{VULKAN_SDK}/Lib")
+
+if (NOT SLANG_INCLUDE_DIR OR NOT SLANG_LIBRARY)
+	message(FATAL_ERROR "Could not find the Slang SDK components in the Vulkan SDK installation")
+else()
+	message(STATUS "Using Slang include dir: ${SLANG_INCLUDE_DIR}")
+	message(STATUS "Using Slang library: ${SLANG_LIBRARY}")
+	include_directories(${SLANG_INCLUDE_DIR})
+endif()
+
 IF(UNIX AND NOT APPLE)
     set(LINUX TRUE)
 ENDIF()
