@@ -939,25 +939,20 @@ int32_t VulkanExampleBase::handleAppInput(struct android_app* app, AInputEvent* 
 	VulkanExampleBase* vulkanExample = reinterpret_cast<VulkanExampleBase*>(app->userData);
 	if (AInputEvent_getType(event) == AINPUT_EVENT_TYPE_MOTION)
 	{
-		int32_t eventSource = AInputEvent_getSource(event);
-		switch (eventSource) {
-			case AINPUT_SOURCE_JOYSTICK: {
+		const int32_t eventSource = AInputEvent_getSource(event);
+		if (eventSource) {
+			if ((eventSource & AINPUT_SOURCE_JOYSTICK) == AINPUT_SOURCE_JOYSTICK) {
 				// Left thumbstick
 				vulkanExample->gamePadState.axisLeft.x = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_X, 0);
 				vulkanExample->gamePadState.axisLeft.y = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Y, 0);
 				// Right thumbstick
 				vulkanExample->gamePadState.axisRight.x = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Z, 0);
 				vulkanExample->gamePadState.axisRight.y = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_RZ, 0);
-				break;
 			}
-
-			// FIXME: Reusing code for TOUCHSCREEN seemingly works well for MOUSE event source,
-			// but it would be better to provide a dedicated event handling logic for MOUSE event source.
-			case AINPUT_SOURCE_MOUSE:
-			case AINPUT_SOURCE_TOUCHSCREEN: {
-				int32_t action = AMotionEvent_getAction(event);
-				int32_t pointerCount = AMotionEvent_getPointerCount(event);
-				int32_t flags = action & AMOTION_EVENT_ACTION_MASK;
+			else if ((eventSource & AINPUT_SOURCE_CLASS_POINTER) != 0) {
+				const int32_t action = AMotionEvent_getAction(event);
+				const int32_t pointerCount = std::min((int32_t)AMotionEvent_getPointerCount(event), (int32_t)vulkanExample->touchPoints.size());
+				const int32_t flags = action & AMOTION_EVENT_ACTION_MASK;
 
 				switch (flags) {
 					case AMOTION_EVENT_ACTION_DOWN:
@@ -1019,15 +1014,19 @@ int32_t VulkanExampleBase::handleAppInput(struct android_app* app, AInputEvent* 
 							vulkanExample->pinchDist = d;
 						} else {
 							// Rotate
-							if (!uiMouseCapture && vulkanExample->touchPoints[0].down) {
+							if (vulkanExample->touchPoints[0].down) {
 								int32_t eventX = AMotionEvent_getX(event, 0);
 								int32_t eventY = AMotionEvent_getY(event, 0);
+								vulkanExample->mousePos.x = eventX;
+								vulkanExample->mousePos.y = eventY;
 
-								float deltaX = (vulkanExample->touchPoints[0].y - eventY) * vulkanExample->camera.rotationSpeed * 0.5f;
-								float deltaY = (vulkanExample->touchPoints[0].x - eventX) * vulkanExample->camera.rotationSpeed * 0.5f;
+								if (!uiMouseCapture) {
+									float deltaX = (vulkanExample->touchPoints[0].y - eventY) * vulkanExample->camera.rotationSpeed * 0.5f;
+									float deltaY = (vulkanExample->touchPoints[0].x - eventX) * vulkanExample->camera.rotationSpeed * 0.5f;
 
-								vulkanExample->camera.rotate(glm::vec3(deltaX, 0.0f, 0.0f));
-								vulkanExample->camera.rotate(glm::vec3(0.0f, -deltaY, 0.0f));
+									vulkanExample->camera.rotate(glm::vec3(deltaX, 0.0f, 0.0f));
+									vulkanExample->camera.rotate(glm::vec3(0.0f, -deltaY, 0.0f));
+								}
 
 								vulkanExample->touchPoints[0].x = eventX;
 								vulkanExample->touchPoints[0].y = eventY;
