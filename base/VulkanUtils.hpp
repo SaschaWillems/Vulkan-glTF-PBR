@@ -125,15 +125,72 @@ void readDirectory(const std::string& directory, const std::string &extension, s
 	AAssetDir* assetDir = AAssetManager_openDir(androidApp->activity->assetManager, directory.c_str());
 	AAssetDir_rewind(assetDir);
 	const char* assetName;
+	std::vector<std::string> filesInDir;
 	while ((assetName = AAssetDir_getNextFileName(assetDir)) != 0) {
 		std::string filename(assetName);
+		filesInDir.push_back(filename);
 		if (filename.find(extension) == std::string::npos) {
 			continue;
 		}
 		filename.erase(filename.find_last_of("."), std::string::npos);
-		filelist[filename] = directory + "/" + assetName;
+		filelist[filename] = directory.empty() ? assetName : (directory + "/" + assetName);
 	}
 	AAssetDir_close(assetDir);
+	if (recursive) {
+		JNIEnv* env = nullptr;
+		bool attached = false;
+		jint res = androidApp->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6);
+		if (res == JNI_EDETACHED) {
+			if (androidApp->activity->vm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+				attached = true;
+			}
+		}
+		if (env != nullptr) {
+			jclass activityClass = env->GetObjectClass(androidApp->activity->clazz);
+			jmethodID getAssetsMethod = env->GetMethodID(activityClass, "getAssets", "()Landroid/content/res/AssetManager;");
+			jobject assetManagerObj = env->CallObjectMethod(androidApp->activity->clazz, getAssetsMethod);
+			jclass assetManagerClass = env->GetObjectClass(assetManagerObj);
+			jmethodID listMethod = env->GetMethodID(assetManagerClass, "list", "(Ljava/lang/String;)[Ljava/lang/String;");
+
+			jstring dirStr = env->NewStringUTF(directory.c_str());
+			jobjectArray filesArray = (jobjectArray)env->CallObjectMethod(assetManagerObj, listMethod, dirStr);
+			env->DeleteLocalRef(dirStr);
+			if (env->ExceptionCheck()) {
+				env->ExceptionClear();
+				filesArray = nullptr;
+			}
+
+			std::vector<std::string> subdirs;
+			if (filesArray != nullptr) {
+				jsize count = env->GetArrayLength(filesArray);
+				for (jsize i = 0; i < count; i++) {
+					jstring fileStr = (jstring)env->GetObjectArrayElement(filesArray, i);
+					const char* fileChars = env->GetStringUTFChars(fileStr, nullptr);
+					if (fileChars != nullptr) {
+						std::string entryName(fileChars);
+						env->ReleaseStringUTFChars(fileStr, fileChars);
+						if (std::find(filesInDir.begin(), filesInDir.end(), entryName) == filesInDir.end()) {
+							subdirs.push_back(directory.empty() ? entryName : (directory + "/" + entryName));
+						}
+					}
+					env->DeleteLocalRef(fileStr);
+				}
+				env->DeleteLocalRef(filesArray);
+			}
+
+			env->DeleteLocalRef(assetManagerClass);
+			env->DeleteLocalRef(assetManagerObj);
+			env->DeleteLocalRef(activityClass);
+
+			for (const auto& subdir : subdirs) {
+				readDirectory(subdir, extension, filelist, recursive);
+			}
+
+			if (attached) {
+				androidApp->activity->vm->DetachCurrentThread();
+			}
+		}
+	}
 #elif defined(VK_USE_PLATFORM_WIN32_KHR)
 	std::string searchpattern(directory + "/*" + extension);
 	WIN32_FIND_DATA data;
