@@ -902,10 +902,7 @@ public:
 
 		VkPipelineMultisampleStateCreateInfo multisampleStateCI{};
 		multisampleStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-
-		if (settings.multiSampling) {
-			multisampleStateCI.rasterizationSamples = settings.sampleCount;
-		}
+		multisampleStateCI.rasterizationSamples = settings.multiSampling ? settings.sampleCount : VK_SAMPLE_COUNT_1_BIT;
 
 		std::vector<VkDynamicState> dynamicStateEnables = {
 			VK_DYNAMIC_STATE_VIEWPORT,
