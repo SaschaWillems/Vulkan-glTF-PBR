@@ -2108,7 +2108,8 @@ public:
 		}
 
 #if defined(VK_USE_PLATFORM_ANDROID_KHR)
-		if (mouseButtons.left) {
+		if (mouseButtons.left && !touchPoints[0].down) {
+			// Only disable left mouse button if the user is not touching the screen
 			mouseButtons.left = false;
 		}
 #endif
